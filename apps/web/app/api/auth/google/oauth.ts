@@ -396,10 +396,15 @@ export async function resolveAuthenticatedMailRouteContext(request: Request) {
 }
 
 function requiredEnvironmentValue(value: string | undefined): string {
-  if (!value?.trim()) {
+  const normalized = value?.trim();
+  if (
+    !normalized ||
+    normalized === "..." ||
+    /^your(?:[-_]|$)/i.test(normalized)
+  ) {
     throw new OAuthConfigurationError();
   }
-  return value.trim();
+  return normalized;
 }
 
 function parseScopes(value: string | null | undefined): string[] {

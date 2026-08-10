@@ -60,6 +60,26 @@ describe("Google OAuth routes", () => {
     });
   });
 
+  it("treats documentation placeholders as missing OAuth configuration", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "...");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "your-client-secret");
+    vi.stubEnv(
+      "GOOGLE_REDIRECT_URI",
+      "http://localhost:3000/api/auth/google/callback",
+    );
+    vi.stubEnv(
+      "SUBZERO_ENCRYPTION_KEY",
+      Buffer.alloc(32, 9).toString("base64"),
+    );
+
+    const response = beginGoogleOAuth();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "oauth_not_configured",
+    });
+  });
+
   it("requests gmail.modify with an opaque state and an HttpOnly state cookie", () => {
     configureGoogleOAuth();
 
