@@ -157,11 +157,11 @@ Status labels below describe current documentation/build state, not a production
 
 ## Known limitations and blockers
 
-- Live Gmail/OAuth credentials are configured locally; acceptance still needs browser authorization with an authorized Gmail test user and a callback port that is free and matches `GOOGLE_REDIRECT_URI`.
+- The encryption key and callback URI are configured locally, but the current `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` values are placeholders. Replace them with a real Google OAuth web-client pair, then authorize an approved Gmail test user on a callback port that is free and matches `GOOGLE_REDIRECT_URI`.
 - A public hosted OAuth rollout may need Google restricted-scope verification. The first OSS release may target developers, self-hosters, and explicitly configured test users instead.
-- Live AI acceptance needs a user-owned provider key and provider quota. No provider key is currently configured, requested, printed, or committed by this project.
+- Live AI acceptance needs a user-owned supported Subzero provider key and provider quota. No supported provider key is currently configured, requested, printed, or committed by this project.
 - One Gmail account only. No Outlook, generic IMAP, multi-account, native mobile, shared inbox, or enterprise-admin support.
-- Local evidence: 18 Vitest files and 77/77 tests pass; typecheck, a clean production build, formatting, Chrome/WebKit 13/13 E2E, and 10 consecutive Chrome smoke runs pass. This does not prove live Gmail/provider behavior.
+- Local evidence: 18 Vitest files and 77/77 tests pass; typecheck, a clean production build, formatting, Chrome/WebKit 13/13 E2E, and 11 consecutive Chrome smoke runs pass. This does not prove live Gmail/provider behavior.
 - Firefox was attempted but the bundled browser could not create a usable tab on this macOS runner (`MachCheckInListener TimedOut`). WebKit passes 13/13. Edge is opt-in (`SUBZERO_INCLUDE_EDGE=true`) and requires an installed system Edge binary; no Edge result is claimed.
 - The production E2E command rebuilds the Next artifact before serving. Keep `.next` isolated from overlapping builds; stale/concurrent output can cause ENOENT failures even when a clean build passes.
 - Docker Compose syntax, image build, and an isolated demo container health check pass. Live container Gmail/OAuth is not claimed. The Docker path requires a configured `.env`, OAuth test user, encryption key, and optional BYOK key, and persists SQLite in the `subzero-data` volume.
