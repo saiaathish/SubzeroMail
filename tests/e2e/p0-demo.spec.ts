@@ -63,6 +63,18 @@ test.describe("@smoke P0 demo acceptance", () => {
     await expect(page.getByTestId("thread-thread-alex-pricing")).toHaveClass(
       /selected/,
     );
+    await page.keyboard.press("k");
+    await expect(page.getByTestId("thread-thread-maya-contract")).toHaveClass(
+      /selected/,
+    );
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("region", { name: "Thread detail" }),
+    ).toBeVisible();
+    await page.keyboard.press("j");
+    await expect(page.getByTestId("thread-thread-alex-pricing")).toHaveClass(
+      /selected/,
+    );
 
     await page.keyboard.press("r");
     await expect(page.getByTestId("composer")).toBeVisible();
