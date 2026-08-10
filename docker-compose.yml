@@ -2,7 +2,7 @@ services:
   subzero:
     build: .
     ports:
-      - "3000:3000"
+      - "${SUBZERO_PORT:-3000}:3000"
     env_file:
       - .env
     environment:

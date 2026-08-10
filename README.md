@@ -108,6 +108,8 @@ Demo mode is not a live Gmail test and must not be used to claim OAuth, Gmail mu
 
 The Compose service exposes port `3000` and persists the local database in the named `subzero-data` volume at `/app/data/subzero.db`. Treat the host, the Docker volume, `.env`, and the master key as sensitive. Back up the volume intentionally; no backup or key-rotation workflow is implemented here.
 
+If port `3000` is already in use, set `SUBZERO_PORT` in `.env` to another host port (the container still listens on `3000`).
+
 Stop the service with:
 
 ```bash
@@ -160,7 +162,7 @@ Status labels below describe current documentation/build state, not a production
 - Local evidence: 18 Vitest files and 77/77 tests pass; typecheck, a clean production build, formatting, Chrome/WebKit 13/13 E2E, and 10 consecutive Chrome smoke runs pass. This does not prove live Gmail/provider behavior.
 - Firefox was attempted but the bundled browser could not create a usable tab on this macOS runner (`MachCheckInListener TimedOut`). WebKit passes 13/13. Edge is opt-in (`SUBZERO_INCLUDE_EDGE=true`) and requires an installed system Edge binary; no Edge result is claimed.
 - The production E2E command rebuilds the Next artifact before serving. Keep `.next` isolated from overlapping builds; stale/concurrent output can cause ENOENT failures even when a clean build passes.
-- Docker Compose syntax passes with the documented placeholder environment, but no container smoke/live OAuth run is claimed. The Docker path requires a configured `.env`, OAuth test user, encryption key, and optional BYOK key, and persists SQLite in the `subzero-data` volume.
+- Docker Compose syntax, image build, and an isolated demo container health check pass. Live container Gmail/OAuth is not claimed. The Docker path requires a configured `.env`, OAuth test user, encryption key, and optional BYOK key, and persists SQLite in the `subzero-data` volume.
 - A clean clone installs and builds successfully. `npm audit --omit=dev` currently reports 7 transitive advisories (3 high, 4 moderate) in Next/PostCSS, sharp, and googleapis/uuid; the available fix requires breaking upgrades and has not been forced into this release.
 - P1 and P2 are not release-ready. Do not treat demo data or fixture-backed tests as proof of production behavior.
 - Screenshot artifacts are pending.
