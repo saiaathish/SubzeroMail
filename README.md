@@ -31,16 +31,18 @@ This repository is an OSS MVP with the P0 release gate still open. Local P1 slic
 git clone <your-fork-or-repository-url>
 cd subzero-mail
 npm ci
-cp .env.example .env
+cp .env.example .env.local
 ```
 
-Generate the server master key locally. Keep it private; do not commit `.env`.
+Next.js loads `.env.local` for local development. Docker Compose reads `.env`, so copy the same values to `.env` when using the container path.
+
+Generate the server master key locally. Keep it private; do not commit `.env` or `.env.local`.
 
 ```bash
 openssl rand -base64 32
 ```
 
-Set the result as `SUBZERO_ENCRYPTION_KEY` in `.env`. The application accepts a 32-byte base64/base64url value or a 64-character hex value.
+Set the result as `SUBZERO_ENCRYPTION_KEY` in `.env.local` (or `.env` for Docker). The application accepts a 32-byte base64/base64url value or a 64-character hex value.
 
 ### Configure Google OAuth
 
@@ -53,7 +55,7 @@ Set the result as `SUBZERO_ENCRYPTION_KEY` in `.env`. The application accepts a 
    http://localhost:3000/api/auth/google/callback
    ```
 
-5. Set these values in `.env`:
+5. Set these values in `.env.local` (or `.env` for Docker):
 
    ```dotenv
    GOOGLE_CLIENT_ID=...
@@ -85,7 +87,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000), then use **Connect Gmail**. The OAuth start endpoint is `GET /api/auth/google`; a missing OAuth configuration returns a safe `oauth_not_configured` response instead of exposing credentials.
 
-For fixture-backed local exploration only, set both demo flags in `.env` to `true`:
+For fixture-backed local exploration only, set both demo flags in `.env.local` to `true`:
 
 ```dotenv
 NEXT_PUBLIC_SUBZERO_DEMO_MODE=true
@@ -155,9 +157,9 @@ Status labels below describe current documentation/build state, not a production
 
 ## Known limitations and blockers
 
-- Live Gmail/OAuth acceptance needs `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, a matching `GOOGLE_REDIRECT_URI`, and an authorized Gmail test user.
+- Live Gmail/OAuth credentials are configured locally; acceptance still needs browser authorization with an authorized Gmail test user and a callback port that is free and matches `GOOGLE_REDIRECT_URI`.
 - A public hosted OAuth rollout may need Google restricted-scope verification. The first OSS release may target developers, self-hosters, and explicitly configured test users instead.
-- Live AI acceptance needs a user-owned provider key and provider quota. No key is requested, printed, or committed by this project.
+- Live AI acceptance needs a user-owned provider key and provider quota. No provider key is currently configured, requested, printed, or committed by this project.
 - One Gmail account only. No Outlook, generic IMAP, multi-account, native mobile, shared inbox, or enterprise-admin support.
 - Local evidence: 18 Vitest files and 77/77 tests pass; typecheck, a clean production build, formatting, Chrome/WebKit 13/13 E2E, and 10 consecutive Chrome smoke runs pass. This does not prove live Gmail/provider behavior.
 - Firefox was attempted but the bundled browser could not create a usable tab on this macOS runner (`MachCheckInListener TimedOut`). WebKit passes 13/13. Edge is opt-in (`SUBZERO_INCLUDE_EDGE=true`) and requires an installed system Edge binary; no Edge result is claimed.
