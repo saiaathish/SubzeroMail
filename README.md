@@ -171,7 +171,7 @@ Status labels below describe current documentation/build state, not a production
 - Docker Compose syntax, image build, and an isolated demo container health check pass. Live container Gmail/OAuth is not claimed. The Docker path requires a configured `.env`, OAuth test user, encryption key, and optional BYOK key, and persists SQLite in the `subzero-data` volume.
 - A clean clone installs and builds successfully. `npm audit --omit=dev` currently reports 7 transitive advisories (3 high, 4 moderate) in Next/PostCSS, sharp, and googleapis/uuid; the available fix requires breaking upgrades and has not been forced into this release.
 - P1 and P2 are not release-ready. Do not treat demo data or fixture-backed tests as proof of production behavior.
-- Screenshot artifacts are pending.
+- The checked-in screenshot is a local/demo visual artifact and does not prove live Gmail or provider behavior.
 
 ## Development and contribution
 
