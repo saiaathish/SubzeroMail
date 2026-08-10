@@ -426,6 +426,21 @@ export function InboxWorkspace() {
       const demoConnected =
         demoMode &&
         window.localStorage.getItem("subzero-demo-connected") === "true";
+      const authError = new URLSearchParams(window.location.search).get("auth");
+      const authReason = new URLSearchParams(window.location.search).get(
+        "reason",
+      );
+      if (demoMode && authError === "error") {
+        setConnected(false);
+        setThreads([]);
+        setAuthNotice(
+          authReason === "reconnect"
+            ? "Gmail access was revoked. Reconnect to continue."
+            : "Gmail connection could not be completed.",
+        );
+        setIsLoading(false);
+        return;
+      }
       if (demoMode && !demoConnected) {
         setConnected(false);
         setIsLoading(false);

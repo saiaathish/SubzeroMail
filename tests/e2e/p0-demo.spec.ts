@@ -51,6 +51,21 @@ test.describe("@smoke P0 demo acceptance", () => {
     await expect(page.getByTestId("thread-thread-maya-contract")).toBeVisible();
   });
 
+  test("revoked Gmail auth shows a reconnect action", async ({ page }) => {
+    await waitForInbox(page);
+
+    await page.goto("/?auth=error&reason=reconnect");
+
+    await expect(
+      page.locator('[role="alert"]').filter({
+        hasText: "Gmail access was revoked. Reconnect to continue.",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Reconnect Gmail" }),
+    ).toBeVisible();
+  });
+
   test("keyboard workflow navigates, opens reply, marks follow-up, and ignores composer typing", async ({
     page,
   }) => {
@@ -165,9 +180,7 @@ test.describe("@smoke P0 demo acceptance", () => {
     await expect(page.getByTestId("thread-thread-maya-contract")).toBeVisible();
   });
 
-  test("malicious HTML stays readable without executable URL content", async ({
-    page,
-  }) => {
+  test("prompt-injection email stays inert and readable", async ({ page }) => {
     await waitForInbox(page);
     await page.getByTestId("thread-thread-untrusted-email").click();
 
@@ -177,6 +190,8 @@ test.describe("@smoke P0 demo acceptance", () => {
     );
     await expect(message.locator("script")).toHaveCount(0);
     await expect(message.locator('a[href^="javascript:"]')).toHaveCount(0);
+    await expect(page.getByTestId("composer")).toHaveCount(0);
+    await expect(page.getByTestId("explicit-send")).toHaveCount(0);
   });
 
   test("summary exposes an evidence source chip", async ({ page }) => {
