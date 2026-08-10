@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@subzero/ai": ["packages/ai/src/index.ts"],
+      "@subzero/mail": ["packages/mail/src/index.ts"],
+      "@subzero/security": ["packages/security/src/index.ts"],
+      "@subzero/security/client": ["packages/security/src/client.ts"],
+      "@subzero/storage": ["packages/storage/src/index.ts"],
+      "@/*": ["apps/web/*"]
+    }
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "packages/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
+  ],
+  "exclude": ["node_modules", ".next", "dist"]
+}

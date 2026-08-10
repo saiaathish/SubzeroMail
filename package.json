@@ -1,0 +1,62 @@
+{
+  "name": "subzero-mail",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The fast AI inbox you actually own.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@subzero/web",
+    "build": "npm run build --workspace=@subzero/web",
+    "lint": "npm run lint --workspace=@subzero/web",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "PATH=\"/opt/homebrew/bin:$PATH\" playwright test",
+    "test:smoke": "PATH=\"/opt/homebrew/bin:$PATH\" playwright test --grep @smoke",
+    "test:e2e:edge": "SUBZERO_INCLUDE_EDGE=true PATH=\"/opt/homebrew/bin:$PATH\" playwright test --project=edge",
+    "test:all": "npm run typecheck && npm run test && npm run build && npm run test:e2e",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.66.8",
+    "clsx": "^2.1.1",
+    "dexie": "^4.0.11",
+    "googleapis": "^144.0.0",
+    "lucide-react": "^0.468.0",
+    "next": "^15.1.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sanitize-html": "^2.14.0",
+    "sql.js": "^1.13.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "@tailwindcss/postcss": "^4.0.9",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@types/node": "^22.13.1",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@types/sanitize-html": "^2.13.0",
+    "@types/sql.js": "^1.4.9",
+    "@vitest/coverage-v8": "^3.0.5",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^26.0.0",
+    "playwright": "^1.51.1",
+    "postcss": "^8.5.1",
+    "prettier": "^3.5.0",
+    "tailwindcss": "^4.0.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

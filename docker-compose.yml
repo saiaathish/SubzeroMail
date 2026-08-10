@@ -1,0 +1,15 @@
+services:
+  subzero:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      SUBZERO_DATABASE_URL: /app/data/subzero.db
+    volumes:
+      - subzero-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  subzero-data:

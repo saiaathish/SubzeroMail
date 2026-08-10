@@ -1,0 +1,17 @@
+{
+  "name": "@subzero/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "prettier --check ."
+  },
+  "dependencies": {
+    "@subzero/ai": "0.1.0",
+    "@subzero/mail": "0.1.0",
+    "@subzero/security": "0.1.0",
+    "@subzero/storage": "0.1.0"
+  }
+}
