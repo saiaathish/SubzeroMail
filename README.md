@@ -6,7 +6,11 @@ This repository is an OSS MVP with the P0 release gate still open. Local P1 slic
 
 ## Screenshots
 
-**Pending:** no checked-in screenshot artifact exists yet. Add real, visually verified screenshots here after the visual QA gate; this placeholder is not product evidence.
+The demo inbox shell after connecting the fixture Gmail account:
+
+![Subzero Mail inbox demo](docs/screenshots/inbox-demo.png)
+
+This screenshot is a local/demo visual artifact, not proof of live Gmail or provider behavior.
 
 ## What Subzero does and does not do
 
