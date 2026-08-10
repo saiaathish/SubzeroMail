@@ -30,6 +30,7 @@ Source of truth: [`PRD.md`](./PRD.md). This ledger separates local implementatio
 - Browser evidence: Chrome 13/13 and WebKit 13/13 demo E2E tests passed against isolated production servers, and 10 consecutive Chrome smoke runs passed (11 smoke tests per run). Firefox was attempted but its bundled browser could not create a usable tab in this macOS runner (`MachCheckInListener TimedOut`); Edge runs only with `SUBZERO_INCLUDE_EDGE=true` and an installed `msedge`, which is unavailable here.
 - The production-configured `npm run test:e2e` command rebuilds the Next artifact before starting its server. Run it from a clean, isolated worktree/build directory; overlapping/stale `.next` output can produce ENOENT failures. The clean build used for this ledger passed, but no full production E2E matrix is claimed.
 - Docker tooling is present and `docker compose config` passes with the documented placeholder environment. No `docker compose up --build` self-host smoke or live container Gmail/OAuth run is claimed. The Docker path still requires a configured `.env`, OAuth test user, encryption key, and optional BYOK key; SQLite data persists in the named `subzero-data` volume.
+- A fresh clone of `feat/prd-build` passed `npm ci`, `npm run typecheck`, and `npm run build`. `npm audit --omit=dev` reports 7 transitive advisories (3 high, 4 moderate) in Next/PostCSS, sharp, and googleapis/uuid; the available automated fix requires breaking upgrades, so no forced dependency rewrite was applied.
 - Screenshots and visual QA artifacts are still pending.
 
 ## Test ledger
@@ -45,3 +46,5 @@ Source of truth: [`PRD.md`](./PRD.md). This ledger separates local implementatio
 | Edge E2E           | NOT RUN — opt-in project requires installed system Edge                                           |
 | Docker config      | PASS — `docker compose config` with documented placeholder environment                            |
 | Docker self-host   | NOT RUN — no container smoke/live OAuth evidence                                                  |
+| Clean checkout     | PASS — fresh clone, `npm ci`, typecheck, and production build                                     |
+| Dependency audit   | WARN — 7 transitive advisories; fixes require breaking upgrades                                   |
