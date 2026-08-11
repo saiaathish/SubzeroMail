@@ -95,19 +95,22 @@ describe("log redaction", () => {
 });
 
 describe("email sanitization", () => {
-  it("strips active content and blocks remote images by default", () => {
+  it("strips active content while preserving Gmail-like remote images and safe layout styles", () => {
     const result = sanitizeEmailHtmlWithMetadata(`
-      <div onclick="steal()">Safe copy<script>alert("xss")</script></div>
-      <img src="https://tracker.example/pixel.png" onerror="steal()" alt="tracker" />
-      <img src="//tracker.example/pixel-two.png" />
+      <div onclick="steal()" style="padding: 12px; background-color: #ffffff; background-image: url(https://tracker.example/bg.png)">
+        Safe copy<script>alert("xss")</script>
+      </div>
+      <img src="https://tracker.example/pixel.png" onerror="steal()" alt="tracker" width="600" />
       <a href="javascript:steal()" onclick="steal()">unsafe link</a>
     `);
 
     expect(result.html).toContain("Safe copy");
-    expect(result.html).not.toMatch(
-      /script|onclick|onerror|javascript:|tracker\.example/i,
-    );
-    expect(result.blockedRemoteImages).toBe(2);
+    expect(result.html).toContain("https://tracker.example/pixel.png");
+    expect(result.html).toContain('width="600"');
+    expect(result.html).toContain("padding:12px");
+    expect(result.html).not.toMatch(/script|onclick|onerror|javascript:/i);
+    expect(result.html).not.toContain("background-image");
+    expect(result.blockedRemoteImages).toBe(0);
   });
 
   it("returns safe readable text when HTML cannot be rendered", () => {
