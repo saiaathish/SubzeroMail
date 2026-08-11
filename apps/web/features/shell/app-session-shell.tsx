@@ -25,6 +25,12 @@ type SessionPayload = {
 };
 
 const THEME_STORAGE_KEY = "subzero-theme";
+const DEMO_SESSION_KEY = "subzero-demo-connected";
+const DEMO_PROFILE: SessionProfile = {
+  email: "you@example.com",
+  name: "Subzero Demo",
+  picture: null,
+};
 
 export function AppSessionShell() {
   const demoMode = process.env.NEXT_PUBLIC_SUBZERO_DEMO_MODE === "true";
@@ -50,12 +56,10 @@ export function AppSessionShell() {
 
   useEffect(() => {
     if (demoMode) {
-      setSessionState("authenticated");
-      setProfile({
-        email: "you@example.com",
-        name: "Subzero Demo",
-        picture: null,
-      });
+      const remembered =
+        window.localStorage.getItem(DEMO_SESSION_KEY) === "true";
+      setProfile(remembered ? DEMO_PROFILE : null);
+      setSessionState(remembered ? "authenticated" : "signed-out");
       return;
     }
 
@@ -116,24 +120,32 @@ export function AppSessionShell() {
   };
 
   const signIn = () => {
+    if (demoMode) {
+      window.localStorage.setItem(DEMO_SESSION_KEY, "true");
+      setProfile(DEMO_PROFILE);
+      setSessionState("authenticated");
+      return;
+    }
     window.location.assign("/api/auth/google");
   };
 
   const signOut = async () => {
     setMenuOpen(false);
     try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "same-origin",
-      });
+      if (demoMode) {
+        window.localStorage.removeItem(DEMO_SESSION_KEY);
+      } else {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+        });
+      }
     } finally {
       await clearCachedThreads().catch(() => undefined);
       setProfile(null);
       setSessionState("signed-out");
     }
   };
-
-  if (demoMode) return <InboxWorkspace />;
 
   if (sessionState === "loading") {
     return (
@@ -166,7 +178,7 @@ export function AppSessionShell() {
             onClick={signIn}
           >
             <GoogleMark />
-            Continue with Google
+            {demoMode ? "Connect demo Gmail" : "Continue with Google"}
           </button>
           <div className="auth-trust-row">
             <ShieldCheck size={15} aria-hidden="true" />
