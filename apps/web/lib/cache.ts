@@ -24,3 +24,9 @@ export async function cacheThreads(threads: InboxThread[]) {
 export async function loadCachedThreads() {
   return cache.threads.toArray();
 }
+
+export async function clearCachedThreads() {
+  await cache.transaction("rw", cache.threads, async () => {
+    await cache.threads.clear();
+  });
+}
