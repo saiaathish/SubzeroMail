@@ -2,14 +2,13 @@ import { expect, test, type Page } from "@playwright/test";
 
 const waitForInbox = async (page: Page) => {
   await page.goto("/");
-  await expect(
-    page.getByRole("main", { name: "Subzero Mail inbox" }),
-  ).toBeVisible();
   const firstThread = page.getByTestId("thread-thread-maya-contract");
   if (!(await firstThread.isVisible())) {
     await page.getByTestId("connect-gmail").click();
-    await page.getByRole("button", { name: "Connect demo Gmail" }).click();
   }
+  await expect(
+    page.getByRole("main", { name: "Subzero Mail inbox" }),
+  ).toBeVisible();
   await expect(firstThread).toBeVisible();
 };
 
@@ -26,29 +25,50 @@ test.describe("@smoke P0 demo acceptance", () => {
     });
   });
 
-  test("first-time demo Gmail connect is explicit and reaches an inbox", async ({
+  test("first-time access is gated behind explicit Google connection", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(
-      page.getByRole("main", { name: "Subzero Mail inbox" }),
+      page.getByRole("main", { name: "Sign in to Subzero Mail" }),
     ).toBeVisible();
     await expect(page.getByTestId("thread-thread-maya-contract")).toHaveCount(
       0,
     );
-    await page.getByTestId("connect-gmail").click();
-    await expect(
-      page.getByRole("dialog", { name: "Connect one Gmail account" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Subzero uses the official Gmail API"),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Connect demo Gmail" }).click();
+    await expect(page.getByText("Your inbox, without the subscription.")).toBeVisible();
 
-    await expect(page.getByTestId("connect-gmail")).toContainText(
-      "Gmail connected",
-    );
+    await page.getByTestId("connect-gmail").click();
+
+    await expect(
+      page.getByRole("main", { name: "Subzero Mail inbox" }),
+    ).toBeVisible();
     await expect(page.getByTestId("thread-thread-maya-contract")).toBeVisible();
+    await expect(page.getByTestId("account-menu")).toContainText("Subzero Demo");
+  });
+
+  test("account menu switches and remembers themes, then signs out cleanly", async ({
+    page,
+  }) => {
+    await waitForInbox(page);
+
+    await page.getByTestId("account-menu").click();
+    await expect(
+      page.getByRole("dialog", { name: "Google account and appearance" }),
+    ).toContainText("you@example.com");
+
+    await page.getByRole("button", { name: /Dark/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByTestId("thread-thread-maya-contract")).toBeVisible();
+
+    await page.getByTestId("account-menu").click();
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(
+      page.getByRole("main", { name: "Sign in to Subzero Mail" }),
+    ).toBeVisible();
+    await expect(page.getByTestId("thread-thread-maya-contract")).toHaveCount(0);
   });
 
   test("revoked Gmail auth shows a reconnect action", async ({ page }) => {

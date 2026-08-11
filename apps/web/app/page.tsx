@@ -1,5 +1,5 @@
-import { InboxWorkspace } from "@/features/inbox/inbox-workspace";
+import { AppSessionShell } from "@/features/shell/app-session-shell";
 
 export default function HomePage() {
-  return <InboxWorkspace />;
+  return <AppSessionShell />;
 }

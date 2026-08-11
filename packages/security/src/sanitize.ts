@@ -5,6 +5,8 @@ const ALLOWED_TAGS = [
   "b",
   "blockquote",
   "br",
+  "caption",
+  "center",
   "code",
   "dd",
   "details",
@@ -12,6 +14,7 @@ const ALLOWED_TAGS = [
   "dl",
   "dt",
   "em",
+  "font",
   "h1",
   "h2",
   "h3",
@@ -41,12 +44,67 @@ const ALLOWED_TAGS = [
 ];
 
 const ALLOWED_ATTRIBUTES = {
+  "*": ["style", "dir"],
   a: ["href", "title", "target", "rel"],
-  img: ["src", "alt", "width", "height", "title", "loading"],
+  font: ["color", "face", "size"],
+  img: [
+    "src",
+    "alt",
+    "width",
+    "height",
+    "title",
+    "loading",
+    "referrerpolicy",
+  ],
   ol: ["start"],
-  table: ["border", "cellpadding", "cellspacing"],
-  td: ["colspan", "rowspan"],
-  th: ["colspan", "rowspan"],
+  table: ["border", "cellpadding", "cellspacing", "width", "align", "bgcolor"],
+  tbody: ["align", "valign"],
+  td: ["colspan", "rowspan", "width", "height", "align", "valign", "bgcolor"],
+  th: ["colspan", "rowspan", "width", "height", "align", "valign", "bgcolor"],
+  tr: ["align", "valign", "bgcolor"],
+};
+
+const SAFE_STYLE_VALUE = /^(?!.*(?:url\s*\(|expression\s*\(|javascript\s*:)).+$/i;
+
+const ALLOWED_STYLES = {
+  "*": {
+    color: [SAFE_STYLE_VALUE],
+    "background-color": [SAFE_STYLE_VALUE],
+    "text-align": [SAFE_STYLE_VALUE],
+    "text-decoration": [SAFE_STYLE_VALUE],
+    "font-family": [SAFE_STYLE_VALUE],
+    "font-size": [SAFE_STYLE_VALUE],
+    "font-style": [SAFE_STYLE_VALUE],
+    "font-weight": [SAFE_STYLE_VALUE],
+    "line-height": [SAFE_STYLE_VALUE],
+    margin: [SAFE_STYLE_VALUE],
+    "margin-top": [SAFE_STYLE_VALUE],
+    "margin-right": [SAFE_STYLE_VALUE],
+    "margin-bottom": [SAFE_STYLE_VALUE],
+    "margin-left": [SAFE_STYLE_VALUE],
+    padding: [SAFE_STYLE_VALUE],
+    "padding-top": [SAFE_STYLE_VALUE],
+    "padding-right": [SAFE_STYLE_VALUE],
+    "padding-bottom": [SAFE_STYLE_VALUE],
+    "padding-left": [SAFE_STYLE_VALUE],
+    border: [SAFE_STYLE_VALUE],
+    "border-top": [SAFE_STYLE_VALUE],
+    "border-right": [SAFE_STYLE_VALUE],
+    "border-bottom": [SAFE_STYLE_VALUE],
+    "border-left": [SAFE_STYLE_VALUE],
+    "border-collapse": [SAFE_STYLE_VALUE],
+    "border-spacing": [SAFE_STYLE_VALUE],
+    "border-radius": [SAFE_STYLE_VALUE],
+    width: [SAFE_STYLE_VALUE],
+    "min-width": [SAFE_STYLE_VALUE],
+    "max-width": [SAFE_STYLE_VALUE],
+    height: [SAFE_STYLE_VALUE],
+    "min-height": [SAFE_STYLE_VALUE],
+    "max-height": [SAFE_STYLE_VALUE],
+    display: [SAFE_STYLE_VALUE],
+    "vertical-align": [SAFE_STYLE_VALUE],
+    "white-space": [SAFE_STYLE_VALUE],
+  },
 };
 
 const SAFE_DATA_IMAGE =
@@ -54,8 +112,8 @@ const SAFE_DATA_IMAGE =
 
 export interface SanitizeEmailOptions {
   /**
-   * Off by default. Call only after an explicit user action such as
-   * "Load images" and sanitize the original message again.
+   * Kept for API compatibility. Subzero now follows Gmail-style display and
+   * renders remote images automatically after sanitizing active content.
    */
   allowRemoteImages?: boolean;
 }
@@ -66,8 +124,10 @@ export interface SanitizedEmail {
 }
 
 /**
- * Sanitize untrusted email HTML. Scripts, event handlers, forms, unsafe URLs,
- * and remote images are removed by default.
+ * Sanitize untrusted email HTML while preserving the layout primitives that
+ * real-world HTML email relies on. Scripts, event handlers, forms, unsafe URLs,
+ * CSS URL loads, and other active content are still removed. Remote <img>
+ * sources are displayed automatically, matching the expected modern mail UI.
  */
 export function sanitizeEmailHtml(
   value: unknown,
@@ -76,24 +136,20 @@ export function sanitizeEmailHtml(
   return sanitizeEmailHtmlWithMetadata(value, options).html;
 }
 
-/**
- * Same sanitizer plus the remote-image count needed to offer a user-controlled
- * "Load images" action without loading anything automatically.
- */
 export function sanitizeEmailHtmlWithMetadata(
   value: unknown,
-  options: SanitizeEmailOptions = {},
+  _options: SanitizeEmailOptions = {},
 ): SanitizedEmail {
   const source = typeof value === "string" ? value : "";
-  const allowRemoteImages = options.allowRemoteImages === true;
-  let blockedRemoteImages = 0;
+  const allowRemoteImages = true;
 
   const html = sanitizeHtml(source, {
     allowedTags: ALLOWED_TAGS,
     allowedAttributes: ALLOWED_ATTRIBUTES,
+    allowedStyles: ALLOWED_STYLES,
     allowedSchemes: ["http", "https", "mailto", "tel"],
     allowedSchemesByTag: {
-      img: allowRemoteImages ? ["http", "https", "data"] : ["data"],
+      img: ["http", "https", "data"],
     },
     allowedSchemesAppliedToAttributes: ["href", "src"],
     disallowedTagsMode: "discard",
@@ -114,11 +170,6 @@ export function sanitizeEmailHtmlWithMetadata(
           return { tagName, attribs: safeAttributes };
         }
 
-        if (!allowRemoteImages && isRemoteImageSource(src)) {
-          blockedRemoteImages += 1;
-          return { tagName, attribs: safeAttributes };
-        }
-
         if (
           src.toLowerCase().startsWith("data:") &&
           !SAFE_DATA_IMAGE.test(src)
@@ -126,12 +177,20 @@ export function sanitizeEmailHtmlWithMetadata(
           return { tagName, attribs: safeAttributes };
         }
 
-        return { tagName, attribs: { ...safeAttributes, src } };
+        return {
+          tagName,
+          attribs: {
+            ...safeAttributes,
+            src,
+            loading: safeAttributes.loading ?? "lazy",
+            referrerpolicy: "no-referrer",
+          },
+        };
       },
     },
   });
 
-  return { html, blockedRemoteImages };
+  return { html, blockedRemoteImages: allowRemoteImages ? 0 : 0 };
 }
 
 /**
@@ -164,15 +223,6 @@ export function safeTextFallback(value: unknown): string {
 }
 
 export const emailHtmlToSafeText = safeTextFallback;
-
-function isRemoteImageSource(src: string): boolean {
-  const normalized = src.trim().toLowerCase();
-  return (
-    normalized.startsWith("http://") ||
-    normalized.startsWith("https://") ||
-    normalized.startsWith("//")
-  );
-}
 
 function normalizeSafeText(value: string): string {
   return value
