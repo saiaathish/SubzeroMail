@@ -41,33 +41,49 @@ function errorResponse(cause: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const { account } = await requireMailRouteContext(request);
+    const { account, provider } = await requireMailRouteContext(request);
     const storage = createStorage();
     const loops = await storage.listOpenLoops(account.id);
     const threads = await storage.listThreads(account.id);
 
-    // Automatic resolution: a loop whose source message is no longer the
-    // thread's newest message is superseded by newer evidence. This is a
-    // deterministic read-time reconciliation, never a mailbox mutation.
-    const nowIso = new Date().toISOString();
+    // Automatic resolution is direction-aware: a loop is superseded only when
+    // the newest message actually advances the obligation — the account owner
+    // replied (resolves "i_owe") or the other party replied (resolves
+    // "they_owe"/"waiting"). An inbound nudge never resolves the user's own
+    // obligation, and a user nudge never resolves the other party's.
+    const ownerAddress = account.gmailAddress.toLowerCase();
     for (const loop of loops) {
       if (loop.status !== "open") continue;
       const cached = threads.find(
         (thread) => thread.threadId === loop.threadId,
       );
       if (
-        cached &&
-        loop.sourceMessageId &&
-        cached.latestMessageId !== loop.sourceMessageId
+        !cached ||
+        !loop.sourceMessageId ||
+        cached.latestMessageId === loop.sourceMessageId
       ) {
-        await storage.updateOpenLoop({
-          accountId: account.id,
-          id: loop.id,
-          status: "resolved",
-        });
-        loop.status = "resolved";
-        loop.resolvedAt = nowIso;
+        continue;
       }
+      let newestFrom: string | undefined;
+      try {
+        const thread = await provider.getThread(loop.threadId);
+        newestFrom = thread.messages.at(-1)?.from?.address;
+      } catch {
+        continue; // Unreachable evidence must never resolve a loop.
+      }
+      const ownerReplied =
+        typeof newestFrom === "string" &&
+        newestFrom.toLowerCase() === ownerAddress;
+      const resolves =
+        loop.direction === "i_owe" ? ownerReplied : !ownerReplied;
+      if (!resolves) continue;
+      await storage.updateOpenLoop({
+        accountId: account.id,
+        id: loop.id,
+        status: "resolved",
+      });
+      loop.status = "resolved";
+      loop.resolvedAt = new Date().toISOString();
     }
 
     // Reminders resurface open commitments that are due now or within two days.

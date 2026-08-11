@@ -14,3 +14,4 @@ data/
 *.db-wal
 *.tsbuildinfo
 DS_Store
+gui-test-screenshots/

@@ -188,6 +188,54 @@ describe("BYOK route security contract", () => {
     });
   });
 
+  it("rejects base URLs with embedded credentials", async () => {
+    const response = await POST(
+      settingsRequest({
+        action: "save",
+        provider: "openai-compatible",
+        model: "model",
+        key: "sk-secret-value",
+        baseUrl: "https://user:sekret@opencode.ai/zen/go/v1",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.storage.saveProviderKey).not.toHaveBeenCalled();
+  });
+
+  it("rejects cleartext http to non-loopback hosts", async () => {
+    const response = await POST(
+      settingsRequest({
+        action: "save",
+        provider: "openai-compatible",
+        model: "model",
+        key: "sk-secret-value",
+        baseUrl: "http://169.254.169.254/latest/meta-data/",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.storage.saveProviderKey).not.toHaveBeenCalled();
+  });
+
+  it("allows loopback http for local OpenAI-compatible gateways", async () => {
+    const response = await POST(
+      settingsRequest({
+        action: "save",
+        provider: "openai-compatible",
+        model: "model",
+        key: "sk-secret-value",
+        baseUrl: "http://127.0.0.1:11434/v1",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.storage.saveSettings).toHaveBeenCalledWith(
+      "trusted-account",
+      expect.objectContaining({ baseUrl: "http://127.0.0.1:11434/v1" }),
+    );
+  });
+
   it("tests with the stored key and stored base URL when neither is submitted", async () => {
     mocks.storage.providerKey.mockResolvedValue(encryptSecret("sk-stored"));
     mocks.storage.settings.mockResolvedValue({

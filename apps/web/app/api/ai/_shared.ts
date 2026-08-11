@@ -21,6 +21,27 @@ function isProviderId(value: unknown): value is ProviderId {
   );
 }
 
+/**
+ * Read-time safety guard for a stored OpenAI-compatible base URL. Mirrors the
+ * save-time policy: no embedded credentials, and plain http only for loopback
+ * hosts (local gateways), because the provider receives the API key.
+ */
+function isSafeBaseUrl(value: unknown): value is string {
+  if (typeof value !== "string" || !value.trim()) return false;
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return false;
+  }
+  if (url.username || url.password) return false;
+  const loopback =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "::1";
+  return url.protocol === "https:" || (url.protocol === "http:" && loopback);
+}
+
 export class AIActionError extends Error {
   constructor(
     readonly code: "AI_NOT_CONFIGURED" | "INVALID_REQUEST" | "AI_UNAVAILABLE",
@@ -81,14 +102,14 @@ export async function configuredAIProvider(
     apiKey: decryptSecret(encrypted),
     model: settings.model,
   };
-  // Stored base URLs are validated when saved; guard again so a malformed
-  // legacy value never reaches a provider adapter.
+  // Stored base URLs are validated when saved; guard again so a malformed or
+  // unsafe legacy value never reaches a provider adapter. Only https (or
+  // loopback http) is accepted — the provider sends the API key to this URL.
   if (
     settings.provider === "openai-compatible" &&
-    typeof settings.baseUrl === "string" &&
-    /^https?:\/\//.test(settings.baseUrl)
+    isSafeBaseUrl(settings.baseUrl)
   ) {
-    options.baseUrl = settings.baseUrl.replace(/\/+$/, "");
+    options.baseUrl = settings.baseUrl.trim().replace(/\/+$/, "");
   }
   if (settings.provider === "anthropic") return new AnthropicProvider(options);
   if (settings.provider === "gemini") return new GeminiProvider(options);

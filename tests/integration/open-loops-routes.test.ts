@@ -285,7 +285,7 @@ describe("P1.2 Open Loop routes", () => {
     });
   });
 
-  it("auto-resolves an open loop superseded by a newer message in the thread", async () => {
+  it("does NOT auto-resolve an i_owe loop when the other party nudges", async () => {
     installProvider();
     await createOpenLoop(
       request("/api/open-loops", {
@@ -296,17 +296,80 @@ describe("P1.2 Open Loop routes", () => {
         dueAt: null,
       }),
     );
+    // The other party follows up ("just checking in") — a newer message
+    // arrives from Maya, not the owner.
+    const nudged = fixtureThread();
+    nudged.latestMessageId = "message-2";
+    nudged.messages = [
+      ...nudged.messages,
+      {
+        ...nudged.messages[0],
+        id: "message-2",
+        body: "Just checking in on the contract.",
+        snippet: "Just checking in on the contract.",
+      },
+    ];
     await createStorage().upsertThread({
       accountId: account.id,
       threadId: "thread-1",
       latestMessageId: "message-2",
       subject: "Contract review",
       participants: ["maya@example.com", account.gmailAddress],
-      preview: "A newer reply arrived.",
+      preview: "Just checking in on the contract.",
       unread: true,
       gmailLabels: ["INBOX", "UNREAD"],
       bucket: "needs_reply",
     });
+    configureMailRouteContextResolver(() => ({
+      account,
+      provider: new DemoMailProvider({ account, threads: [nudged] }),
+    }));
+
+    const response = await listOpenLoops(request("/api/open-loops"));
+    const body = await json<{
+      data: { loops: Array<{ status: string }> };
+    }>(response);
+    expect(body.data.loops[0].status).toBe("open");
+  });
+
+  it("auto-resolves an i_owe loop once the owner replies", async () => {
+    installProvider();
+    await createOpenLoop(
+      request("/api/open-loops", {
+        threadId: "thread-1",
+        sourceMessageId: "message-1",
+        direction: "i_owe",
+        text: "Send the redlined contract",
+        dueAt: null,
+      }),
+    );
+    const replied = fixtureThread();
+    replied.latestMessageId = "message-2";
+    replied.messages = [
+      ...replied.messages,
+      {
+        ...replied.messages[0],
+        id: "message-2",
+        from: { address: account.gmailAddress, name: "Owner" },
+        body: "Here is the redlined contract.",
+        snippet: "Here is the redlined contract.",
+      },
+    ];
+    await createStorage().upsertThread({
+      accountId: account.id,
+      threadId: "thread-1",
+      latestMessageId: "message-2",
+      subject: "Contract review",
+      participants: ["maya@example.com", account.gmailAddress],
+      preview: "Here is the redlined contract.",
+      unread: false,
+      gmailLabels: ["INBOX"],
+      bucket: "waiting",
+    });
+    configureMailRouteContextResolver(() => ({
+      account,
+      provider: new DemoMailProvider({ account, threads: [replied] }),
+    }));
 
     const response = await listOpenLoops(request("/api/open-loops"));
     const body = await json<{

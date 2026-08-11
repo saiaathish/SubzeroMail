@@ -347,6 +347,9 @@ export function InboxWorkspace() {
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [autoArchiveNotice, setAutoArchiveNotice] = useState<string | null>(
+    null,
+  );
   const [composerRecipients, setComposerRecipients] = useState("");
   const [composerSubject, setComposerSubject] = useState("");
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
@@ -410,13 +413,32 @@ export function InboxWorkspace() {
         );
         setConnected(true);
         setAuthNotice(null);
-        if (!demoMode) {
+        if (!demoMode && !gmailQuery?.trim() && !appending) {
           // Opt-in auto-archive: the server no-ops unless the user enabled
-          // it in Focus settings, so this stays silent and safe.
-          void fetch("/api/mail/auto-archive", {
-            method: "POST",
-            credentials: "same-origin",
-          }).catch(() => undefined);
+          // it in Focus settings. Runs only on plain inbox loads — never on
+          // search keystrokes — and reports what it archived.
+          void (async () => {
+            try {
+              const response = await fetch("/api/mail/auto-archive", {
+                method: "POST",
+                credentials: "same-origin",
+              });
+              const result = (await response.json()) as {
+                ok?: boolean;
+                data?: { archived?: string[] };
+              };
+              if (response.ok && result.ok && result.data?.archived?.length) {
+                const count = result.data.archived.length;
+                setAutoArchiveNotice(
+                  `Auto-archived ${count} obvious newsletter${
+                    count === 1 ? "" : "s"
+                  }. Recoverable anytime from Gmail All Mail.`,
+                );
+              }
+            } catch {
+              // Silent: auto-archive is best-effort by design.
+            }
+          })();
         }
       } catch {
         setAuthNotice(
@@ -1540,6 +1562,11 @@ export function InboxWorkspace() {
             >
               Reconnect Gmail
             </button>
+          </div>
+        ) : null}
+        {autoArchiveNotice ? (
+          <div className="banner" role="status">
+            {autoArchiveNotice}
           </div>
         ) : null}
         <AskInboxPanel

@@ -30,19 +30,33 @@ function isProviderId(value: unknown): value is ProviderId {
 
 /**
  * Validate a user-supplied OpenAI-compatible base URL. Absent/empty input is
- * valid (the provider default is used); anything else must be a real http(s)
- * URL. A trailing slash is stripped so the provider can append the chat path.
+ * valid (the provider default is used); anything else must be a real URL.
+ * Embedded credentials are rejected outright, and plain http is allowed only
+ * for loopback hosts (local gateways) — the server sends the API key to this
+ * endpoint, so anything else must be https. A trailing slash is stripped so
+ * the provider can append the chat path.
  */
 function parseBaseUrl(
   value: unknown,
 ): { ok: true; value?: string } | { ok: false } {
   if (typeof value !== "string" || !value.trim()) return { ok: true };
+  let url: URL;
   try {
-    const url = new URL(value.trim());
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
-      return { ok: false };
-    }
+    url = new URL(value.trim());
   } catch {
+    return { ok: false };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { ok: false };
+  }
+  if (url.username || url.password) {
+    return { ok: false };
+  }
+  const loopback =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "::1";
+  if (url.protocol === "http:" && !loopback) {
     return { ok: false };
   }
   return { ok: true, value: value.trim().replace(/\/+$/, "") };

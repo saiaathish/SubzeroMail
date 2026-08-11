@@ -44,7 +44,8 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_SUBZERO_DEMO_MODE: "true",
       SUBZERO_DEMO_MODE: "true",
-      SUBZERO_ENCRYPTION_KEY: "test-key-for-playwright-only-32-bytes",
+      // Valid 32-byte base64 key: the demo server encrypts BYOK secrets.
+      SUBZERO_ENCRYPTION_KEY: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
     },
   },
   projects,
