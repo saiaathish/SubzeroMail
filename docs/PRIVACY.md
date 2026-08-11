@@ -5,8 +5,8 @@
 Last reviewed: 2026-08-11.
 
 This document describes the current web application and the local WXT MV3
-extension. It is not evidence of Chrome Web Store approval, Google OAuth
-verification, or a public privacy URL.
+extension. It is not evidence of Chrome Web Store approval or Google OAuth
+verification; the public GitHub copy is the policy URL saved in the draft.
 
 ## What Subzero Mail is
 
