@@ -341,6 +341,7 @@ export function InboxWorkspace() {
   const [forceProviderDown, setForceProviderDown] = useState(false);
   const [provider, setProvider] = useState("openai-compatible");
   const [model, setModel] = useState("gpt-4.1-mini");
+  const [providerBaseUrl, setProviderBaseUrl] = useState("");
   const [keyInput, setKeyInput] = useState("");
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState<string | null>(null);
@@ -542,8 +543,15 @@ export function InboxWorkspace() {
     )
       .then(async (response) => {
         if (!response.ok) return;
-        const result = (await response.json()) as { configured?: boolean };
+        const result = (await response.json()) as {
+          configured?: boolean;
+          model?: string;
+          baseUrl?: string;
+        };
         setKeyConfigured(Boolean(result.configured));
+        if (typeof result.model === "string") setModel(result.model);
+        if (typeof result.baseUrl === "string")
+          setProviderBaseUrl(result.baseUrl);
       })
       .catch(() => undefined);
   }, [modal, provider]);
@@ -1079,7 +1087,15 @@ export function InboxWorkspace() {
       const response = await fetch("/api/settings/provider-key", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, provider, model, key: keyInput }),
+        body: JSON.stringify({
+          action,
+          provider,
+          model,
+          key: keyInput,
+          ...(provider === "openai-compatible"
+            ? { baseUrl: providerBaseUrl.trim() || undefined }
+            : {}),
+        }),
       });
       const body = (await response.json()) as {
         error?: string;
@@ -1540,11 +1556,13 @@ export function InboxWorkspace() {
         <SettingsModal
           provider={provider}
           model={model}
+          baseUrl={providerBaseUrl}
           keyInput={keyInput}
           configured={keyConfigured}
           notice={settingsNotice}
           onProvider={setProvider}
           onModel={setModel}
+          onBaseUrl={setProviderBaseUrl}
           onKey={setKeyInput}
           onSave={() => void providerKeyAction("save")}
           onTest={() => void providerKeyAction("test")}
@@ -1891,11 +1909,13 @@ function ConnectModal({
 function SettingsModal({
   provider,
   model,
+  baseUrl,
   keyInput,
   configured,
   notice,
   onProvider,
   onModel,
+  onBaseUrl,
   onKey,
   onSave,
   onTest,
@@ -1904,11 +1924,13 @@ function SettingsModal({
 }: {
   provider: string;
   model: string;
+  baseUrl: string;
   keyInput: string;
   configured: boolean;
   notice: string | null;
   onProvider: (value: string) => void;
   onModel: (value: string) => void;
+  onBaseUrl: (value: string) => void;
   onKey: (value: string) => void;
   onSave: () => void;
   onTest: () => void;
@@ -1949,6 +1971,19 @@ function SettingsModal({
               onChange={(event) => onModel(event.target.value)}
             />
           </label>
+          {provider === "openai-compatible" ? (
+            <label>
+              Base URL (optional)
+              <input
+                className="field"
+                aria-label="Provider base URL"
+                autoComplete="off"
+                placeholder="https://api.openai.com/v1 — or a compatible endpoint"
+                value={baseUrl}
+                onChange={(event) => onBaseUrl(event.target.value)}
+              />
+            </label>
+          ) : null}
           <label>
             API key
             <input

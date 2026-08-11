@@ -59,6 +59,7 @@ export async function configuredAIProvider(
   const settings = (await storage.settings(accountId)) as {
     provider?: unknown;
     model?: unknown;
+    baseUrl?: unknown;
   };
   if (
     !isProviderId(settings.provider) ||
@@ -76,7 +77,19 @@ export async function configuredAIProvider(
       "AI_NOT_CONFIGURED",
       "Configure a provider key in BYOK settings first.",
     );
-  const options = { apiKey: decryptSecret(encrypted), model: settings.model };
+  const options: { apiKey: string; model: string; baseUrl?: string } = {
+    apiKey: decryptSecret(encrypted),
+    model: settings.model,
+  };
+  // Stored base URLs are validated when saved; guard again so a malformed
+  // legacy value never reaches a provider adapter.
+  if (
+    settings.provider === "openai-compatible" &&
+    typeof settings.baseUrl === "string" &&
+    /^https?:\/\//.test(settings.baseUrl)
+  ) {
+    options.baseUrl = settings.baseUrl.replace(/\/+$/, "");
+  }
   if (settings.provider === "anthropic") return new AnthropicProvider(options);
   if (settings.provider === "gemini") return new GeminiProvider(options);
   return new OpenAICompatibleProvider(options);
