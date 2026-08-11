@@ -251,4 +251,70 @@ describe("P1.2 Open Loop routes", () => {
       data: { loops: [{ status: "resolved", resolvedAt: expect.any(String) }] },
     });
   });
+
+  it("resurfaces overdue and due-soon commitments as reminders", async () => {
+    installProvider();
+    await createOpenLoop(
+      request("/api/open-loops", {
+        threadId: "thread-1",
+        sourceMessageId: "message-1",
+        direction: "i_owe",
+        text: "Send the redlined contract",
+        dueAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    );
+    await createOpenLoop(
+      request("/api/open-loops", {
+        threadId: "thread-1",
+        sourceMessageId: "message-1",
+        direction: "they_owe",
+        text: "Await Maya's final draft",
+        dueAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    );
+
+    const response = await listOpenLoops(request("/api/open-loops"));
+    expect(response.status).toBe(200);
+    const body = await json<{
+      data: { reminders: Array<{ kind: string; text: string }> };
+    }>(response);
+    expect(body.data.reminders).toHaveLength(1);
+    expect(body.data.reminders[0]).toMatchObject({
+      kind: "overdue",
+      text: "Send the redlined contract",
+    });
+  });
+
+  it("auto-resolves an open loop superseded by a newer message in the thread", async () => {
+    installProvider();
+    await createOpenLoop(
+      request("/api/open-loops", {
+        threadId: "thread-1",
+        sourceMessageId: "message-1",
+        direction: "i_owe",
+        text: "Send the redlined contract",
+        dueAt: null,
+      }),
+    );
+    await createStorage().upsertThread({
+      accountId: account.id,
+      threadId: "thread-1",
+      latestMessageId: "message-2",
+      subject: "Contract review",
+      participants: ["maya@example.com", account.gmailAddress],
+      preview: "A newer reply arrived.",
+      unread: true,
+      gmailLabels: ["INBOX", "UNREAD"],
+      bucket: "needs_reply",
+    });
+
+    const response = await listOpenLoops(request("/api/open-loops"));
+    const body = await json<{
+      data: { loops: Array<{ status: string }> };
+    }>(response);
+    expect(body.data.loops[0]).toMatchObject({
+      status: "resolved",
+      resolvedAt: expect.any(String),
+    });
+  });
 });

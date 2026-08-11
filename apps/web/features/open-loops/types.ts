@@ -22,3 +22,12 @@ export const openLoopDirectionLabel: Record<OpenLoopDirection, string> = {
   they_owe: "They owe",
   waiting: "Waiting",
 };
+
+/** A due resurfacing of an open commitment (overdue or due within 2 days). */
+export type OpenLoopReminder = {
+  loopId: string;
+  threadId: string;
+  text: string;
+  dueAt: string;
+  kind: "overdue" | "due_soon";
+};

@@ -329,6 +329,7 @@ export function InboxWorkspace() {
   const [modal, setModal] = useState<Modal>(null);
   const [composerMode, setComposerMode] = useState<ComposerMode | null>(null);
   const [composerText, setComposerText] = useState("");
+  const [suggestedDraft, setSuggestedDraft] = useState(false);
   const [draftIntent, setDraftIntent] = useState("");
   const [draftUndo, setDraftUndo] = useState<string | null>(null);
   const [isDrafting, setIsDrafting] = useState(false);
@@ -409,6 +410,14 @@ export function InboxWorkspace() {
         );
         setConnected(true);
         setAuthNotice(null);
+        if (!demoMode) {
+          // Opt-in auto-archive: the server no-ops unless the user enabled
+          // it in Focus settings, so this stays silent and safe.
+          void fetch("/api/mail/auto-archive", {
+            method: "POST",
+            credentials: "same-origin",
+          }).catch(() => undefined);
+        }
       } catch {
         setAuthNotice(
           "Network error while loading Gmail. Retry when the connection returns.",
@@ -584,6 +593,55 @@ export function InboxWorkspace() {
       setSelectedId(selectedThread.id);
   }, [selectedId, selectedThread]);
 
+  // Background suggested draft: only for an opened high-priority thread in
+  // reply mode, only while the composer is untouched, and never after the
+  // user starts typing. Failures are silent — the manual composer remains
+  // the source of truth.
+  useEffect(() => {
+    if (
+      demoMode ||
+      !connected ||
+      !composerMode ||
+      composerMode === "new" ||
+      composerText !== "" ||
+      suggestedDraft ||
+      !selectedThread ||
+      (selectedThread.bucket !== "needs_reply" &&
+        selectedThread.bucket !== "waiting")
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await fetch("/api/ai/auto-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ threadId: selectedThread.id }),
+          });
+          const result = (await response.json()) as {
+            ok?: boolean;
+            data?: { draft?: string | null };
+          };
+          if (!response.ok || !result.ok || !result.data?.draft) return;
+          setComposerText(result.data.draft);
+          setSuggestedDraft(true);
+        } catch {
+          // Best-effort; never block the composer.
+        }
+      })();
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [
+    composerMode,
+    composerText,
+    connected,
+    demoMode,
+    selectedThread,
+    suggestedDraft,
+  ]);
+
   const updateThread = useCallback(
     (id: string, updater: (thread: InboxThread) => InboxThread) => {
       setThreads((current) =>
@@ -722,6 +780,7 @@ export function InboxWorkspace() {
       if (!selectedThread && mode !== "new") return;
       setComposerMode(mode);
       setComposerText("");
+      setSuggestedDraft(false);
       setDraftIntent("");
       setDraftUndo(null);
       setSendState("idle");
@@ -873,6 +932,7 @@ export function InboxWorkspace() {
     draftTimer.current = null;
     draftAbort.current?.abort();
     draftAbort.current = null;
+    setSuggestedDraft(false);
     setIsDrafting(false);
   };
 
@@ -1532,7 +1592,23 @@ export function InboxWorkspace() {
             }}
             onRecipients={setComposerRecipients}
             onSubject={setComposerSubject}
-            onText={setComposerText}
+            onText={(value) => {
+              if (suggestedDraft && value !== composerText) {
+                // The user took over the suggested draft; the server will
+                // never regenerate or overwrite it again.
+                setSuggestedDraft(false);
+                void fetch("/api/ai/auto-draft", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
+                  body: JSON.stringify({
+                    threadId: selectedThread?.id,
+                    userEdited: true,
+                  }),
+                }).catch(() => undefined);
+              }
+              setComposerText(value);
+            }}
             onIntent={setDraftIntent}
             onGenerate={generateDraft}
             onCancel={cancelDraft}

@@ -42,10 +42,57 @@ function errorResponse(cause: unknown) {
 export async function GET(request: Request) {
   try {
     const { account } = await requireMailRouteContext(request);
-    const loops = await createStorage().listOpenLoops(account.id);
+    const storage = createStorage();
+    const loops = await storage.listOpenLoops(account.id);
+    const threads = await storage.listThreads(account.id);
+
+    // Automatic resolution: a loop whose source message is no longer the
+    // thread's newest message is superseded by newer evidence. This is a
+    // deterministic read-time reconciliation, never a mailbox mutation.
+    const nowIso = new Date().toISOString();
+    for (const loop of loops) {
+      if (loop.status !== "open") continue;
+      const cached = threads.find(
+        (thread) => thread.threadId === loop.threadId,
+      );
+      if (
+        cached &&
+        loop.sourceMessageId &&
+        cached.latestMessageId !== loop.sourceMessageId
+      ) {
+        await storage.updateOpenLoop({
+          accountId: account.id,
+          id: loop.id,
+          status: "resolved",
+        });
+        loop.status = "resolved";
+        loop.resolvedAt = nowIso;
+      }
+    }
+
+    // Reminders resurface open commitments that are due now or within two days.
+    const horizon = Date.now() + 2 * 24 * 60 * 60 * 1000;
+    const reminders = loops
+      .filter((loop) => loop.status === "open" && loop.dueAt)
+      .map((loop) => ({
+        loopId: loop.id,
+        threadId: loop.threadId,
+        text: loop.text,
+        dueAt: loop.dueAt!,
+        kind:
+          new Date(loop.dueAt!).getTime() <= Date.now()
+            ? ("overdue" as const)
+            : ("due_soon" as const),
+      }))
+      .filter((reminder) => new Date(reminder.dueAt).getTime() <= horizon)
+      .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+
     return NextResponse.json({
       ok: true,
-      data: { loops: loops.map(toOpenLoop) },
+      data: {
+        loops: loops.map(toOpenLoop),
+        reminders,
+      },
     });
   } catch (cause) {
     return errorResponse(cause);

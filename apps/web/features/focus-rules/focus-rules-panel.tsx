@@ -29,6 +29,7 @@ export function FocusRulesPanel() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [autoArchive, setAutoArchive] = useState(false);
 
   useEffect(() => {
     void fetch("/api/settings/focus-rules", { credentials: "same-origin" })
@@ -48,7 +49,50 @@ export function FocusRulesPanel() {
         ),
       )
       .finally(() => setLoading(false));
+    void fetch("/api/settings/auto-archive", { credentials: "same-origin" })
+      .then(async (response) => {
+        const result = (await response.json()) as {
+          ok?: boolean;
+          data?: { enabled?: boolean };
+        };
+        if (response.ok && result.ok && result.data) {
+          setAutoArchive(result.data.enabled === true);
+        }
+      })
+      .catch(() => undefined);
   }, []);
+
+  const toggleAutoArchive = async (enabled: boolean) => {
+    setAutoArchive(enabled);
+    try {
+      const response = await fetch("/api/settings/auto-archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ enabled }),
+      });
+      const result = (await response.json()) as {
+        ok?: boolean;
+        error?: { message?: string };
+      };
+      if (!response.ok || !result.ok)
+        throw new Error(
+          result.error?.message ?? "Could not save auto-archive setting.",
+        );
+      setNotice(
+        enabled
+          ? "Auto-archive enabled: obvious newsletters will skip the inbox."
+          : "Auto-archive disabled.",
+      );
+    } catch (cause) {
+      setAutoArchive(!enabled);
+      setNotice(
+        cause instanceof Error
+          ? cause.message
+          : "Could not save auto-archive setting.",
+      );
+    }
+  };
 
   const persist = async (next: FocusRule[]) => {
     setRules(next);
@@ -131,6 +175,23 @@ export function FocusRulesPanel() {
           {notice}
         </div>
       ) : null}
+      <div className="settings-card">
+        <label className="focus-rule-toggle">
+          <input
+            type="checkbox"
+            checked={autoArchive}
+            aria-label="Auto-archive obvious newsletters"
+            onChange={(event) => void toggleAutoArchive(event.target.checked)}
+          />
+          <span>
+            <b>Auto-archive obvious newsletters</b>
+            <small>
+              Threads with a deterministic newsletter signal (confidence ≥ 0.90)
+              skip the primary inbox on refresh. No model is involved.
+            </small>
+          </span>
+        </label>
+      </div>
       <div className="settings-card">
         <h2>{editingId ? "Edit rule" : "Add a rule"}</h2>
         <div className="focus-rule-form">

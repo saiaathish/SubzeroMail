@@ -545,6 +545,12 @@ select:focus-visible,
   margin-top: 4px;
   line-height: 1.35;
 }
+.loop-row.is-overdue {
+  border-color: var(--danger, #b3261e);
+}
+.loop-row.is-overdue .progress {
+  color: var(--danger, #b3261e);
+}
 .open-loop-edit {
   width: 100%;
   display: grid;
@@ -602,6 +608,21 @@ select:focus-visible,
 }
 .focus-rule-form .field {
   width: 100%;
+}
+.focus-rule-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.focus-rule-toggle input {
+  margin-top: 3px;
+}
+.focus-rule-toggle small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
 }
 .checkbox-row {
   align-self: end;

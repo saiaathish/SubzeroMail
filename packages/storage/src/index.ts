@@ -88,6 +88,16 @@ const schema = `
     resolved_at TEXT,
     UNIQUE(account_id, thread_id, source_message_id, direction, text)
   );
+  CREATE TABLE IF NOT EXISTS auto_drafts (
+    account_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    source_latest_message_id TEXT,
+    user_edited_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, thread_id)
+  );
   CREATE TABLE IF NOT EXISTS voice_profiles (
     account_id TEXT PRIMARY KEY,
     profile_json TEXT NOT NULL,
@@ -434,6 +444,54 @@ export function createStorage(
         createdAt: row.created_at,
         resolvedAt,
       };
+    },
+
+    async autoDraft(accountId: string, threadId: string) {
+      const row = first<{
+        body: string;
+        source_latest_message_id: string | null;
+        user_edited_at: string | null;
+      }>(
+        await db(),
+        "SELECT body, source_latest_message_id, user_edited_at FROM auto_drafts WHERE account_id = ? AND thread_id = ?",
+        [accountId, threadId],
+      );
+      return row
+        ? {
+            body: row.body,
+            sourceLatestMessageId: row.source_latest_message_id,
+            userEditedAt: row.user_edited_at,
+          }
+        : null;
+    },
+
+    async saveAutoDraft(input: {
+      accountId: string;
+      threadId: string;
+      body: string;
+      sourceLatestMessageId: string | null;
+    }) {
+      const timestamp = now();
+      await mutate(
+        `INSERT INTO auto_drafts (account_id, thread_id, body, source_latest_message_id, user_edited_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?)
+         ON CONFLICT(account_id, thread_id) DO UPDATE SET body=excluded.body, source_latest_message_id=excluded.source_latest_message_id, updated_at=excluded.updated_at`,
+        [
+          input.accountId,
+          input.threadId,
+          input.body,
+          input.sourceLatestMessageId,
+          timestamp,
+          timestamp,
+        ],
+      );
+    },
+
+    async markAutoDraftEdited(accountId: string, threadId: string) {
+      await mutate(
+        "UPDATE auto_drafts SET user_edited_at = ? WHERE account_id = ? AND thread_id = ?",
+        [now(), accountId, threadId],
+      );
     },
 
     async saveVoiceProfile(accountId: string, profile: unknown) {

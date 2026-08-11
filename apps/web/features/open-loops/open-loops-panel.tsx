@@ -14,6 +14,7 @@ import {
   openLoopDirectionLabel,
   type OpenLoop,
   type OpenLoopDirection,
+  type OpenLoopReminder,
 } from "./types";
 
 export type OpenLoopThreadTarget = {
@@ -54,6 +55,7 @@ export function OpenLoopsPanel({
   onOpenSource: (threadId: string, sourceMessageId: string | null) => void;
 }) {
   const [loops, setLoops] = useState<OpenLoop[]>([]);
+  const [reminders, setReminders] = useState<OpenLoopReminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,11 +77,13 @@ export function OpenLoopsPanel({
       });
       const result = (await response.json()) as ApiResult<{
         loops: OpenLoop[];
+        reminders: OpenLoopReminder[];
       }>;
       if (!response.ok || !result.ok || !result.data) {
         throw new Error(result.error?.message ?? "Could not load Open Loops.");
       }
       setLoops(result.data.loops);
+      setReminders(result.data.reminders ?? []);
       setError(null);
     } catch (cause) {
       setError(
@@ -304,11 +308,51 @@ export function OpenLoopsPanel({
       </form>
 
       {loading ? <div className="empty-state">Loading Open Loops…</div> : null}
-      {!loading && !loops.length ? (
+      {!loading && !loops.length && !reminders.length ? (
         <div className="empty-state">
           No Open Loops yet. Detect one from the selected thread or add one
           manually.
         </div>
+      ) : null}
+
+      {!loading && reminders.length ? (
+        <section className="loop-group" aria-label="Reminders">
+          <p className="nav-label">Reminders</p>
+          {reminders.map((reminder) => {
+            const loop = loops.find((item) => item.id === reminder.loopId);
+            return (
+              <article
+                key={reminder.loopId}
+                className={`loop-row${reminder.kind === "overdue" ? " is-overdue" : ""}`}
+                data-testid={`open-loop-reminder-${reminder.loopId}`}
+              >
+                <div>
+                  <strong>{reminder.text}</strong>
+                  <div className="progress">
+                    {reminder.kind === "overdue" ? "Overdue — " : "Due soon — "}
+                    {dueLabel(reminder.dueAt)}
+                  </div>
+                </div>
+                <div className="button-row">
+                  <button
+                    className="secondary-button"
+                    onClick={() => onOpenSource(reminder.threadId, null)}
+                  >
+                    <ExternalLink size={14} /> Open thread
+                  </button>
+                  {loop ? (
+                    <button
+                      className="secondary-button"
+                      onClick={() => void resolveLoop(loop)}
+                    >
+                      <Check size={14} /> Mark resolved
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </section>
       ) : null}
 
       {!loading
