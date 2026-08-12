@@ -1,0 +1,197 @@
+/*
+ * Subzero UI token source.
+ *
+ * The file is intentionally split into primitive, semantic, and component
+ * layers. Consumers can set data-subzero-theme="light" or "dark" on any
+ * ancestor. A plain root defaults to the midnight/dark preset.
+ *
+ * TODO / UNCERTAIN: this package has no verified local Instrument Sans asset
+ * yet. Do not add a remote font URL. When a real local file is added, place a
+ * scoped @font-face rule here and keep Instrument Sans first in the stack.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Primitive tokens                                                            */
+/* -------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+
+  /* Cold-blue, midnight, electric-ice palette. */
+  --sz-color-midnight-950: hsl(216 39% 7%);
+  --sz-color-midnight-900: hsl(213 34% 10%);
+  --sz-color-midnight-850: hsl(211 31% 13%);
+  --sz-color-midnight-800: hsl(210 28% 17%);
+  --sz-color-midnight-700: hsl(210 24% 24%);
+  --sz-color-midnight-600: hsl(209 20% 34%);
+  --sz-color-ice-50: hsl(210 36% 98%);
+  --sz-color-ice-100: hsl(207 30% 93%);
+  --sz-color-ice-200: hsl(207 24% 84%);
+  --sz-color-ice-300: hsl(207 19% 72%);
+  --sz-color-ice-500: hsl(205 17% 53%);
+  --sz-color-electric-ice-300: hsl(198 100% 80%);
+  --sz-color-electric-ice-400: hsl(197 100% 71%);
+  --sz-color-electric-ice-500: hsl(198 93% 61%);
+  --sz-color-electric-blue-600: hsl(203 89% 46%);
+  --sz-color-red-400: hsl(357 100% 78%);
+  --sz-color-red-600: hsl(356 65% 49%);
+  --sz-color-green-300: hsl(151 68% 74%);
+  --sz-color-green-600: hsl(151 70% 38%);
+  --sz-color-amber-300: hsl(39 100% 77%);
+  --sz-color-amber-600: hsl(33 81% 47%);
+
+  /* Every spacing value is a multiple of the 4px base rhythm. */
+  --sz-space-0: 0px;
+  --sz-space-1: 4px;
+  --sz-space-2: 8px;
+  --sz-space-3: 12px;
+  --sz-space-4: 16px;
+  --sz-space-5: 20px;
+  --sz-space-6: 24px;
+  --sz-space-7: 28px;
+  --sz-space-8: 32px;
+  --sz-space-10: 40px;
+  --sz-space-12: 48px;
+  --sz-space-16: 64px;
+
+  --sz-font-family-sans:
+    "Instrument Sans", "Avenir Next", "Segoe UI", sans-serif;
+  --sz-font-family-mono:
+    "SFMono-Regular", "Cascadia Code", "Roboto Mono", monospace;
+  --sz-font-size-2xs: 11px;
+  --sz-font-size-xs: 12px;
+  --sz-font-size-sm: 14px;
+  --sz-font-size-md: 16px;
+  --sz-font-size-lg: 20px;
+  --sz-font-size-xl: 24px;
+  --sz-font-size-2xl: 32px;
+  --sz-line-height-tight: 1.15;
+  --sz-line-height-snug: 1.3;
+  --sz-line-height-normal: 1.5;
+  --sz-line-height-relaxed: 1.65;
+  --sz-letter-spacing-tight: -0.025em;
+  --sz-letter-spacing-label: 0.1em;
+  --sz-font-weight-regular: 400;
+  --sz-font-weight-medium: 560;
+  --sz-font-weight-semibold: 650;
+  --sz-font-weight-bold: 720;
+
+  --sz-radius-xs: 4px;
+  --sz-radius-sm: 8px;
+  --sz-radius-md: 12px;
+  --sz-radius-lg: 16px;
+  --sz-radius-pill: 999px;
+
+  --sz-border-width: 1px;
+  --sz-focus-width: 2px;
+  --sz-focus-offset: 2px;
+  --sz-control-height: 44px;
+  --sz-thread-row-min-height: 72px;
+  --sz-transition-fast: 120ms ease-out;
+  --sz-transition-normal: 180ms ease-out;
+  --sz-transition-slow: 260ms ease-out;
+  --sz-shadow-overlay: 0 24px 72px hsl(216 45% 4% / 0.32);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Semantic tokens: dark preset                                               */
+/* -------------------------------------------------------------------------- */
+
+:root,
+[data-subzero-theme="dark"],
+[data-theme="dark"],
+.subzero-theme-dark {
+  --sz-color-bg-canvas: var(--sz-color-midnight-950);
+  --sz-color-bg-surface: var(--sz-color-midnight-900);
+  --sz-color-bg-raised: var(--sz-color-midnight-850);
+  --sz-color-bg-overlay: var(--sz-color-midnight-800);
+  --sz-color-text: var(--sz-color-ice-50);
+  --sz-color-text-muted: var(--sz-color-ice-300);
+  --sz-color-text-subtle: var(--sz-color-ice-500);
+  --sz-color-text-inverse: var(--sz-color-midnight-950);
+  --sz-color-border: hsl(207 26% 24%);
+  --sz-color-border-strong: hsl(207 25% 34%);
+  --sz-color-accent: var(--sz-color-electric-ice-400);
+  --sz-color-accent-hover: var(--sz-color-electric-ice-300);
+  --sz-color-accent-soft: hsl(198 93% 61% / 0.14);
+  --sz-color-accent-contrast: var(--sz-color-midnight-950);
+  --sz-color-link: var(--sz-color-electric-ice-300);
+  --sz-color-focus: var(--sz-color-electric-ice-300);
+  --sz-color-focus-ring: hsl(198 100% 80% / 0.25);
+  --sz-color-selection-bg: hsl(198 93% 61% / 0.3);
+  --sz-color-selection-fg: var(--sz-color-ice-50);
+  --sz-color-error-bg: hsl(356 50% 18%);
+  --sz-color-error-border: hsl(356 51% 37%);
+  --sz-color-error-text: var(--sz-color-red-400);
+  --sz-color-success-bg: hsl(151 43% 16%);
+  --sz-color-success-border: hsl(151 42% 34%);
+  --sz-color-success-text: var(--sz-color-green-300);
+  --sz-color-warning-bg: hsl(34 48% 16%);
+  --sz-color-warning-border: hsl(35 44% 34%);
+  --sz-color-warning-text: var(--sz-color-amber-300);
+  --sz-color-info-bg: hsl(203 49% 17%);
+  --sz-color-info-border: hsl(203 49% 34%);
+  --sz-color-info-text: var(--sz-color-electric-ice-300);
+  --sz-color-overlay: hsl(216 39% 3% / 0.74);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Semantic tokens: light preset                                              */
+/* -------------------------------------------------------------------------- */
+
+[data-subzero-theme="light"],
+[data-theme="light"],
+.subzero-theme-light {
+  color-scheme: light;
+  --sz-color-bg-canvas: hsl(210 36% 97%);
+  --sz-color-bg-surface: hsl(0 0% 100%);
+  --sz-color-bg-raised: hsl(210 32% 99%);
+  --sz-color-bg-overlay: hsl(210 28% 96%);
+  --sz-color-text: hsl(213 38% 13%);
+  --sz-color-text-muted: hsl(213 18% 39%);
+  --sz-color-text-subtle: hsl(213 16% 50%);
+  --sz-color-text-inverse: var(--sz-color-ice-50);
+  --sz-color-border: hsl(207 24% 86%);
+  --sz-color-border-strong: hsl(207 22% 74%);
+  --sz-color-accent: var(--sz-color-electric-blue-600);
+  --sz-color-accent-hover: hsl(204 90% 34%);
+  --sz-color-accent-soft: hsl(203 89% 46% / 0.1);
+  --sz-color-accent-contrast: var(--sz-color-ice-50);
+  --sz-color-link: hsl(203 89% 34%);
+  --sz-color-focus: hsl(203 89% 40%);
+  --sz-color-focus-ring: hsl(203 89% 46% / 0.2);
+  --sz-color-selection-bg: hsl(200 91% 84%);
+  --sz-color-selection-fg: hsl(214 40% 14%);
+  --sz-color-error-bg: hsl(356 74% 97%);
+  --sz-color-error-border: hsl(356 65% 78%);
+  --sz-color-error-text: hsl(356 65% 36%);
+  --sz-color-success-bg: hsl(151 52% 96%);
+  --sz-color-success-border: hsl(151 46% 75%);
+  --sz-color-success-text: hsl(151 70% 28%);
+  --sz-color-warning-bg: hsl(35 73% 96%);
+  --sz-color-warning-border: hsl(35 62% 73%);
+  --sz-color-warning-text: hsl(33 81% 32%);
+  --sz-color-info-bg: hsl(203 77% 96%);
+  --sz-color-info-border: hsl(203 66% 76%);
+  --sz-color-info-text: hsl(203 89% 31%);
+  --sz-color-overlay: hsl(213 38% 13% / 0.34);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Component tokens                                                            */
+/* -------------------------------------------------------------------------- */
+
+:root {
+  --sz-mark-size-sm: 28px;
+  --sz-mark-size-md: 34px;
+  --sz-mark-size-lg: 42px;
+  --sz-tab-padding-inline: var(--sz-space-4);
+  --sz-thread-row-padding-inline: var(--sz-space-4);
+  --sz-thread-row-padding-block: var(--sz-space-3);
+  --sz-message-padding-block: var(--sz-space-5);
+  --sz-message-padding-inline: var(--sz-space-5);
+  --sz-command-width: 640px;
+  --sz-command-max-height: min(680px, calc(100dvh - var(--sz-space-8)));
+  --sz-empty-state-max-width: 420px;
+  --sz-status-padding-inline: var(--sz-space-2);
+}

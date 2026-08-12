@@ -1,0 +1,29 @@
+{
+  "name": "@subzero/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "PATH=\"/opt/homebrew/bin:$PATH\" wxt",
+    "build": "PATH=\"/opt/homebrew/bin:$PATH\" wxt build",
+    "zip": "PATH=\"/opt/homebrew/bin:$PATH\" wxt zip",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@subzero/ai": "0.1.0",
+    "@subzero/core": "0.1.0",
+    "@subzero/security": "0.1.0",
+    "@subzero/storage": "0.1.0",
+    "@subzero/ui": "0.1.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@wxt-dev/module-react": "1.2.1",
+    "typescript": "^5.7.3",
+    "wxt": "^0.21.4"
+  }
+}

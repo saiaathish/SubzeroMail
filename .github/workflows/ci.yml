@@ -15,7 +15,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,3 +37,12 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Install Chromium for extension smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: Extension build, manifest validation, and Chromium smoke
+        run: npm run extension:test
+
+      - name: Reproducible extension zip
+        run: npm run extension:zip

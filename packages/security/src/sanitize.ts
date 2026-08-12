@@ -47,15 +47,7 @@ const ALLOWED_ATTRIBUTES = {
   "*": ["style", "dir"],
   a: ["href", "title", "target", "rel"],
   font: ["color", "face", "size"],
-  img: [
-    "src",
-    "alt",
-    "width",
-    "height",
-    "title",
-    "loading",
-    "referrerpolicy",
-  ],
+  img: ["src", "alt", "width", "height", "title", "loading", "referrerpolicy"],
   ol: ["start"],
   table: ["border", "cellpadding", "cellspacing", "width", "align", "bgcolor"],
   tbody: ["align", "valign"],
@@ -64,7 +56,8 @@ const ALLOWED_ATTRIBUTES = {
   tr: ["align", "valign", "bgcolor"],
 };
 
-const SAFE_STYLE_VALUE = /^(?!.*(?:url\s*\(|expression\s*\(|javascript\s*:)).+$/i;
+const SAFE_STYLE_VALUE =
+  /^(?!.*(?:url\s*\(|expression\s*\(|javascript\s*:)).+$/i;
 
 const ALLOWED_STYLES = {
   "*": {

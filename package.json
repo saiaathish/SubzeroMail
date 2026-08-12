@@ -11,6 +11,10 @@
   "scripts": {
     "dev": "npm run dev --workspace=@subzero/web",
     "build": "npm run build --workspace=@subzero/web",
+    "extension:dev": "npm run dev --workspace=@subzero/extension",
+    "extension:build": "npm run build --workspace=@subzero/extension",
+    "extension:zip": "npm run zip --workspace=@subzero/extension",
+    "extension:test": "npm run extension:build && node scripts/validate-extension.mjs && if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a env PATH=\"/opt/homebrew/bin:$PATH\" playwright test --config=playwright.extension.config.ts; else PATH=\"/opt/homebrew/bin:$PATH\" playwright test --config=playwright.extension.config.ts; fi",
     "lint": "npm run lint --workspace=@subzero/web",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

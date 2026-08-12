@@ -7,10 +7,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@subzero/ai": `${root}packages/ai/src/index.ts`,
+      "@subzero/core": `${root}packages/core/src/index.ts`,
       "@subzero/mail": `${root}packages/mail/src/index.ts`,
       "@subzero/security/client": `${root}packages/security/src/client.ts`,
       "@subzero/security": `${root}packages/security/src/index.ts`,
+      "@subzero/storage/extension": `${root}packages/storage/src/extension.ts`,
       "@subzero/storage": `${root}packages/storage/src/index.ts`,
+      "@subzero/ui": `${root}packages/ui/src/index.ts`,
       "@": `${root}apps/web`,
     },
   },

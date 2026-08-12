@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Subzero Mail">
+  <rect width="128" height="128" rx="30" fill="#071116"/>
+  <path d="M64 18v92M24.2 41l79.6 46M24.2 87l79.6-46M42 25.8l44 76.4M86 25.8 42 102.2" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="64" cy="64" r="13" fill="#f5fafc"/>
+</svg>

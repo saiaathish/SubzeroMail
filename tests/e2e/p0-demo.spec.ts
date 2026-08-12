@@ -35,7 +35,9 @@ test.describe("@smoke P0 demo acceptance", () => {
     await expect(page.getByTestId("thread-thread-maya-contract")).toHaveCount(
       0,
     );
-    await expect(page.getByText("Your inbox, without the subscription.")).toBeVisible();
+    await expect(
+      page.getByText("Your inbox, without the subscription."),
+    ).toBeVisible();
 
     await page.getByTestId("connect-gmail").click();
 
@@ -43,7 +45,9 @@ test.describe("@smoke P0 demo acceptance", () => {
       page.getByRole("main", { name: "Subzero Mail inbox" }),
     ).toBeVisible();
     await expect(page.getByTestId("thread-thread-maya-contract")).toBeVisible();
-    await expect(page.getByTestId("account-menu")).toContainText("Subzero Demo");
+    await expect(page.getByTestId("account-menu")).toContainText(
+      "Subzero Demo",
+    );
   });
 
   test("account menu switches and remembers themes, then signs out cleanly", async ({
@@ -68,7 +72,9 @@ test.describe("@smoke P0 demo acceptance", () => {
     await expect(
       page.getByRole("main", { name: "Sign in to Subzero Mail" }),
     ).toBeVisible();
-    await expect(page.getByTestId("thread-thread-maya-contract")).toHaveCount(0);
+    await expect(page.getByTestId("thread-thread-maya-contract")).toHaveCount(
+      0,
+    );
   });
 
   test("revoked Gmail auth shows a reconnect action", async ({ page }) => {
