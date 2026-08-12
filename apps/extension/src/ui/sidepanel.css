@@ -107,6 +107,25 @@ summary:focus-visible {
   font-size: 13px;
   letter-spacing: 0.01em;
 }
+.connection-section {
+  display: grid;
+  gap: 10px;
+}
+.connection-section h2 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+.connection-section button {
+  width: 100%;
+  border: 1px solid var(--rail-accent);
+  border-radius: 6px;
+  background: var(--rail-accent);
+  color: #06151b;
+  padding: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
 .status-dot {
   width: 7px;
   height: 7px;

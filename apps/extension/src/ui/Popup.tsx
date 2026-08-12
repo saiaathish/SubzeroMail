@@ -1,7 +1,7 @@
 import { ExternalLink, Pencil, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { getDemoCounts, type FixtureThread } from "../fixtures";
+import type { FixtureThread } from "../fixtures";
 import { sendExtensionMessage } from "../runtime";
 import {
   DEFAULT_EXTENSION_STATE,
@@ -14,31 +14,77 @@ export function Popup() {
   const [counts, setCounts] = useState({ total: 0, needsReply: 0, waiting: 0 });
   const [busy, setBusy] = useState(false);
   const [experience, setExperience] = useState<SubzeroExperience>("both");
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([
-      sendExtensionMessage<ExtensionState>({ type: "app/get-state" }),
-      sendExtensionMessage<FixtureThread[]>({ type: "mail/get-threads" }),
-    ]).then(([stateResponse, threadsResponse]) => {
-      if (stateResponse.ok && stateResponse.data) setState(stateResponse.data);
-      if (threadsResponse.ok && threadsResponse.data) {
-        setCounts(getDemoCounts(threadsResponse.data));
-      }
-    });
+    void sendExtensionMessage<ExtensionState>({ type: "app/get-state" }).then(
+      async (stateResponse) => {
+        if (!stateResponse.ok || !stateResponse.data) return;
+        setState(stateResponse.data);
+        if (stateResponse.data.account.mode !== "connected") return;
+
+        const threadsResponse = await sendExtensionMessage<FixtureThread[]>({
+          type: "mail/get-threads",
+        });
+        if (threadsResponse.ok && threadsResponse.data) {
+          setCounts(getLiveCounts(threadsResponse.data));
+        }
+      },
+    );
   }, []);
 
   useEffect(() => {
     setExperience(state.preferences.experience);
   }, [state.preferences.experience]);
 
-  async function finishOnboarding() {
+  async function connectGoogle() {
     setBusy(true);
-    const response = await sendExtensionMessage<ExtensionState>({
-      type: "settings/update-preferences",
-      preferences: { experience, onboardingComplete: true },
-    });
-    if (response.ok && response.data) setState(response.data);
-    setBusy(false);
+    setConnectionError(null);
+
+    try {
+      const auth = await sendExtensionMessage<{
+        status: string;
+        message: string;
+        threads?: FixtureThread[];
+        email?: string;
+      }>({ type: "oauth/start" });
+      const result = auth.data;
+      if (
+        !auth.ok ||
+        !result ||
+        result.status !== "completed" ||
+        typeof result.email !== "string" ||
+        !Array.isArray(result.threads)
+      ) {
+        setConnectionError(
+          auth.error?.message ??
+            result?.message ??
+            "Google authorization did not complete. Try again to connect Gmail.",
+        );
+        return;
+      }
+
+      const preferences = await sendExtensionMessage<ExtensionState>({
+        type: "settings/update-preferences",
+        preferences: { experience, onboardingComplete: true },
+      });
+      if (!preferences.ok || !preferences.data) {
+        setConnectionError(
+          preferences.error?.message ??
+            "Google authorized Gmail, but Subzero could not save your preferences. Try again.",
+        );
+        return;
+      }
+
+      setState(preferences.data);
+      setCounts(getLiveCounts(result.threads));
+      await sendExtensionMessage({ type: "app/open" });
+      window.close();
+    } catch {
+      setConnectionError("Google connection could not start. Try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function openApp() {
@@ -49,17 +95,26 @@ export function Popup() {
 
   async function refresh() {
     setBusy(true);
-    const response = await sendExtensionMessage<ExtensionState>({
-      type: state.account.mode === "connected" ? "mail/sync" : "app/sync-demo",
-    });
-    if (response.ok && response.data && "theme" in response.data) {
-      setState(response.data);
+    try {
+      const response = await sendExtensionMessage<{
+        threads: FixtureThread[];
+        email: string;
+      }>({ type: "mail/sync" });
+      if (!response.ok || !response.data) {
+        setConnectionError(
+          response.error?.message ?? "Gmail refresh failed. Try again.",
+        );
+        return;
+      }
+
+      const nextState = await sendExtensionMessage<ExtensionState>({
+        type: "app/get-state",
+      });
+      if (nextState.ok && nextState.data) setState(nextState.data);
+      setCounts(getLiveCounts(response.data.threads));
+    } finally {
+      setBusy(false);
     }
-    const threads = await sendExtensionMessage<FixtureThread[]>({
-      type: "mail/get-threads",
-    });
-    if (threads.ok && threads.data) setCounts(getDemoCounts(threads.data));
-    setBusy(false);
   }
 
   function quickCompose() {
@@ -124,18 +179,63 @@ export function Popup() {
         </fieldset>
         <div className="sz-onboarding__footer">
           <p>
-            AI is optional. Continue now and connect a provider later from
-            settings when you want summaries or drafting.
+            AI is optional. You can connect a provider later from settings for
+            summaries or drafting.
           </p>
           <button
             className="sz-popup__primary"
             type="button"
-            onClick={() => void finishOnboarding()}
+            onClick={() => void connectGoogle()}
             disabled={busy}
           >
-            {busy ? "Saving…" : "Continue"}
+            {busy ? "Connecting…" : "Continue with Google"}
           </button>
+          {connectionError ? (
+            <p className="sz-popup__error" role="status">
+              {connectionError}
+            </p>
+          ) : null}
         </div>
+      </main>
+    );
+  }
+
+  if (state.account.mode !== "connected") {
+    return (
+      <main className="sz-popup sz-popup--connection">
+        <header className="sz-popup__header">
+          <div>
+            <div className="sz-popup__mark">
+              <span aria-hidden="true">✦</span> SUBZERO
+            </div>
+            <p>Gmail productivity client</p>
+          </div>
+        </header>
+        <section className="sz-connection__intro">
+          <p className="sz-onboarding__eyebrow">CONNECT YOUR INBOX</p>
+          <h1>Ready when you are.</h1>
+          <p>
+            Connect Google to load your live Gmail inbox. Subzero will not show
+            mail until you approve access.
+          </p>
+        </section>
+        <div className="sz-connection__notice">
+          <ShieldCheck size={15} /> Gmail access stays behind Google&apos;s
+          authorization screen.
+        </div>
+        <button
+          className="sz-popup__primary"
+          type="button"
+          onClick={() => void connectGoogle()}
+          disabled={busy}
+        >
+          {busy ? "Connecting…" : "Continue with Google"}
+        </button>
+        {connectionError ? (
+          <p className="sz-popup__error" role="status">
+            {connectionError}
+          </p>
+        ) : null}
       </main>
     );
   }
@@ -153,7 +253,7 @@ export function Popup() {
           className={`sz-popup__status sz-popup__status--${state.sync.status}`}
         >
           <span aria-hidden="true" />{" "}
-          {state.sync.status === "demo" ? "Demo" : "Ready"}
+          {state.sync.status === "idle" ? "Connected" : "Syncing"}
         </span>
       </header>
 
@@ -201,4 +301,14 @@ export function Popup() {
       <footer>{state.sync.detail}</footer>
     </main>
   );
+}
+
+function getLiveCounts(threads: FixtureThread[]) {
+  const active = threads.filter((thread) => !thread.archived);
+  return {
+    total: active.length,
+    needsReply: active.filter((thread) => thread.bucket === "needs_reply")
+      .length,
+    waiting: active.filter((thread) => thread.bucket === "waiting").length,
+  };
 }

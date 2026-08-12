@@ -5,8 +5,6 @@ import {
   applyAutoLabel,
   applyGmailMutation,
   createGmailDraft,
-  searchGmailThreads,
-  sendGmailDraft,
 } from "../../apps/extension/src/mail/gmail";
 import { isExtensionMessage } from "../../apps/extension/src/messages";
 import {
@@ -53,25 +51,6 @@ afterEach(async () => {
 });
 
 describe("extension Gmail contracts", () => {
-  it("searches the local fixture without a network call", async () => {
-    const results = await searchGmailThreads("from:maya");
-
-    expect(results).toHaveLength(1);
-    expect(results[0]?.senderEmail).toBe("maya@atlas.studio");
-  });
-
-  it("creates and sends a demo draft without requiring OAuth", async () => {
-    const draft = await createGmailDraft({
-      to: ["maya@atlas.studio"],
-      subject: "Thursday review",
-      body: "The revised contract is ready.",
-    });
-
-    expect(draft.draftId).toMatch(/^demo-draft-/);
-    const sent = await sendGmailDraft(draft.draftId);
-    expect(sent.messageId).toMatch(/^demo-message-/);
-  });
-
   it("rejects header injection before any Gmail request", async () => {
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock;
@@ -211,7 +190,10 @@ describe("extension message boundary", () => {
 
   it("keeps state readable after each isolated setup", async () => {
     const state = await loadExtensionState();
-    expect(state.account.mode).toBe("demo");
+    // Disconnected is the fresh-user state; fixture helpers remain isolated
+    // below and must not imply a user-facing demo inbox.
+    expect(state.account.mode).not.toBe("connected");
+    expect(state.account.label).not.toBe("Demo fixture");
   });
 
   it("keeps opt-in automation disabled and side-effect free by default", async () => {

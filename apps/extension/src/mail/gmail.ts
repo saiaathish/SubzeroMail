@@ -7,18 +7,13 @@ import {
 import { ExtensionDatabase } from "@subzero/storage/extension";
 import { sanitizeEmailHtml, safeTextFallback } from "@subzero/security/client";
 
-import {
-  cloneDemoThreads,
-  type FixtureMessage,
-  type FixtureThread,
-} from "../fixtures";
+import type { FixtureMessage, FixtureThread } from "../fixtures";
 import { getIdentityToken } from "../platform/oauth";
 import { loadExtensionState, updateExtensionState } from "../platform/storage";
 
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 500;
-const demoDrafts = new Map<string, GmailDraftInput>();
 const BASE64_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const METADATA_HEADERS = [
@@ -505,25 +500,6 @@ function messageRecordFromGmail(
   };
 }
 
-function matchesDemoQuery(thread: FixtureThread, query: string): boolean {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return true;
-  if (normalized === "is:unread") return thread.unread;
-
-  if (normalized.startsWith("from:")) {
-    const needle = normalized.slice(5).trim();
-    return (
-      thread.sender.toLowerCase().includes(needle) ||
-      thread.senderEmail.toLowerCase().includes(needle)
-    );
-  }
-
-  return [thread.sender, thread.senderEmail, thread.subject, thread.preview]
-    .join(" ")
-    .toLowerCase()
-    .includes(normalized);
-}
-
 async function withDatabase<T>(
   operation: (db: ExtensionDatabase) => Promise<T>,
 ): Promise<T> {
@@ -953,12 +929,6 @@ async function withGmailClient<T>(
   return operation(client, profile);
 }
 
-function isDemoMode(): Promise<boolean> {
-  return loadExtensionState().then(
-    (state) => state.account.mode !== "connected",
-  );
-}
-
 export async function getExtensionThreads(
   limit = DEFAULT_LIMIT,
 ): Promise<FixtureThread[]> {
@@ -973,7 +943,7 @@ export async function getExtensionThreads(
     return synced.threads.slice(0, normalizeLimit(limit));
   }
 
-  return cloneDemoThreads().slice(0, normalizeLimit(limit));
+  return [];
 }
 
 export async function getExtensionThread(
@@ -999,7 +969,7 @@ export async function getExtensionThread(
     });
   }
 
-  return cloneDemoThreads().find((thread) => thread.id === normalizedThreadId);
+  return undefined;
 }
 
 export async function searchGmailThreads(
@@ -1015,9 +985,7 @@ export async function searchGmailThreads(
     });
   }
 
-  return cloneDemoThreads()
-    .filter((thread) => matchesDemoQuery(thread, query))
-    .slice(0, normalizeLimit(limit));
+  return [];
 }
 
 export async function syncGmail(
@@ -1099,7 +1067,7 @@ export type AutoArchiveCategory = "newsletter" | "cold-pitch";
 export type AutoLabelCategory = "priority" | "needs_reply" | "waiting";
 
 export interface AutomationResult {
-  status: "applied" | "disabled" | "demo";
+  status: "applied" | "disabled";
   threadId: string;
   labelId?: string;
 }
@@ -1123,7 +1091,7 @@ export async function applyAutoArchive(
     return { status: "disabled", threadId: normalizedThreadId };
   }
   if (state.account.mode !== "connected") {
-    return { status: "demo", threadId: normalizedThreadId };
+    return { status: "disabled", threadId: normalizedThreadId };
   }
   await withGmailClient(async (client) => client.archive(normalizedThreadId));
   await updateCachedThreadLabelsBestEffort(normalizedThreadId, (labels) =>
@@ -1157,7 +1125,7 @@ export async function applyAutoLabel(
     return { status: "disabled", threadId: normalizedThreadId };
   }
   if (state.account.mode !== "connected") {
-    return { status: "demo", threadId: normalizedThreadId };
+    return { status: "disabled", threadId: normalizedThreadId };
   }
   const labelId = await withGmailClient((client) =>
     client.applySubzeroLabel(normalizedThreadId, labelName),
@@ -1171,24 +1139,15 @@ export async function applyAutoLabel(
 export async function createGmailDraft(
   input: GmailDraftInput,
 ): Promise<GmailDraftResult> {
-  if (await isDemoMode()) {
-    buildDraftRawMessage(input);
-    const draftId = `demo-draft-${
-      typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-    }`;
-    demoDrafts.set(draftId, {
-      ...input,
-      to: [...input.to],
-      ...(input.cc ? { cc: [...input.cc] } : {}),
-      ...(input.bcc ? { bcc: [...input.bcc] } : {}),
-      ...(input.references ? { references: [...input.references] } : {}),
-    });
-    return {
-      draftId,
-      threadId: input.threadId,
-    };
+  // Validate locally before checking auth so malformed input cannot trigger
+  // any identity or Gmail request, even when the user is disconnected.
+  buildDraftRawMessage(input);
+  const state = await loadExtensionState();
+  if (state.account.mode !== "connected") {
+    throw new GmailAdapterError(
+      "gmail_not_connected",
+      "Connect Gmail before creating a draft.",
+    );
   }
 
   return withGmailClient((client) => client.createDraft(input));
@@ -1202,17 +1161,12 @@ export async function sendGmailDraft(
     throw new GmailAdapterError("invalid_draft_id", "Draft id is required.");
   }
 
-  if (await isDemoMode()) {
-    const draft = demoDrafts.get(normalizedDraftId);
-    if (!draft) {
-      throw new GmailAdapterError("draft_not_found", "Draft was not found.");
-    }
-    demoDrafts.delete(normalizedDraftId);
-    return {
-      draftId: normalizedDraftId,
-      messageId: `demo-message-${normalizedDraftId.slice("demo-draft-".length)}`,
-      threadId: draft.threadId ?? `demo-thread-${normalizedDraftId}`,
-    };
+  const state = await loadExtensionState();
+  if (state.account.mode !== "connected") {
+    throw new GmailAdapterError(
+      "gmail_not_connected",
+      "Connect Gmail before sending a draft.",
+    );
   }
 
   return withGmailClient((client) => client.sendDraft(normalizedDraftId));

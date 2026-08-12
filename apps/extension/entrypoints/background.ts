@@ -1,16 +1,15 @@
 import { defineBackground } from "wxt/utils/define-background";
 
 import {
-  loadExtensionState,
-  updateExtensionState,
-} from "../src/platform/storage";
-import {
   listExtensionLoops,
   listExtensionReminders,
   resolveExtensionLoop,
 } from "../src/ai";
 import { getChrome } from "../src/platform/chrome";
-import { handleExtensionMessage } from "../src/message-handler";
+import {
+  handleExtensionMessage,
+  migrateExtensionState,
+} from "../src/message-handler";
 import {
   errorResponse,
   isExtensionMessage,
@@ -18,24 +17,8 @@ import {
   type ExtensionResponse,
 } from "../src/messages";
 import type { ChromeMessageSender } from "../src/platform/chrome";
-import {
-  REMINDER_ALARM,
-  scheduleDemoSyncAlarm,
-  scheduleReminderAlarm,
-} from "../src/platform/alarms";
+import { REMINDER_ALARM, scheduleReminderAlarm } from "../src/platform/alarms";
 import { openOrFocusApp } from "../src/platform/tabs";
-
-async function refreshDemoState(): Promise<void> {
-  const current = await loadExtensionState();
-  if (current.account.mode === "connected") return;
-  await updateExtensionState({
-    sync: {
-      status: "demo",
-      lastSyncedAt: new Date().toISOString(),
-      detail: "Demo fixture refreshed locally. Gmail was not contacted.",
-    },
-  });
-}
 
 const reminderNotifications = new Map<string, string>();
 
@@ -170,7 +153,7 @@ export default defineBackground(() => {
   );
 
   chrome?.runtime?.onInstalled?.addListener(() => {
-    void scheduleDemoSyncAlarm();
+    void migrateExtensionState();
     void chrome?.sidePanel?.setPanelBehavior?.({
       openPanelOnActionClick: false,
     });
@@ -198,13 +181,12 @@ export default defineBackground(() => {
   });
 
   chrome?.alarms?.onAlarm?.addListener((alarm) => {
-    if (alarm.name === "subzero-demo-sync") void refreshDemoState();
     if (alarm.name === REMINDER_ALARM) {
       void notifyDueReminder();
     }
   });
 
-  void loadExtensionState();
+  void migrateExtensionState();
 });
 
 export type BackgroundResponse = ExtensionResponse;

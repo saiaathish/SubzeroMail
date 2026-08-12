@@ -33,11 +33,11 @@ Load the generated Chrome directory from `.output/chrome-mv3` using `chrome://ex
 ## What works locally
 
 - The full-page extension shell opens from the popup and keeps the existing tab focused when possible.
-- The popup exposes Open Subzero, Quick compose, refresh, account status, sync status, and thread count.
-- The account control opens an explicit Gmail data-use disclosure before any interactive Google authorization.
-- A bundled fixture inbox exposes Priority, Needs Reply, Waiting, and Other views.
+- First launch opens onboarding in the popup, then starts interactive Google authorization from `Continue with Google`.
+- The full-page client and Side Panel remain connection-gated until live Gmail access succeeds; no fixture inbox is shown to users.
+- After connection, the popup exposes Open Subzero, Quick compose, refresh, account status, sync status, and live thread count.
 - `Cmd/Ctrl+K`, `J`, `K`, `Enter`, `E`, `U`, `R`, `C`, `/`, and `Escape` are wired in the shell.
-- Live Gmail sync uses `chrome.identity.getAuthToken`, Gmail metadata endpoints, IndexedDB caching, and bounded archive/read mutations. The dedicated extension OAuth client is configured in `apps/extension/wxt.config.ts`; until interactive authorization succeeds and live behavior is verified in a clean profile, the UI remains an honest fixture/demo surface.
+- Live Gmail sync uses `chrome.identity.getAuthToken`, Gmail metadata endpoints, IndexedDB caching, and bounded archive/read mutations. The dedicated extension OAuth client is configured in `apps/extension/wxt.config.ts`; fixture helpers remain only for isolated tests.
 - Archive/read actions update the local view optimistically and restore the row when Gmail rejects the mutation.
 - Selected Gmail HTML is sanitized in the browser-safe security boundary before rendering; remote images remain an explicit sender-controlled network risk.
 - Thread summaries and intent-based drafts use the shared `@subzero/ai` schema boundary with a deterministic local fallback; send still requires an explicit click.
@@ -45,16 +45,16 @@ Load the generated Chrome directory from `.output/chrome-mv3` using `chrome://ex
 - Open Loops are detected from explicit requests/promises, stored in IndexedDB, resolved locally, and resurfaced through `chrome.alarms` reminders.
 - BYOK settings support OpenAI-compatible custom Base URLs, Anthropic, and Gemini. API keys are session-only in the background worker and never go through Chrome sync or local settings.
 - Light/dark theme state is persisted through `chrome.storage.local` when available and does not replace account state.
-- Chrome storage and alarms have an in-memory fallback so the demo shell remains usable outside an extension runtime.
+- Chrome storage and alarms have an in-memory fallback for isolated tests outside an extension runtime.
 - Gmail embedded mode mounts one idempotent Shadow DOM action cluster per open thread, an inline summary surface, compose drafting action, quick command palette, focus signals, and an `Open in Subzero` escape hatch. A Gmail SPA observer reports route/compose context to the background worker.
 - The Side Panel exposes `Now`, `Ask`, `Open Loops`, source chips, current-thread continuity, Gmail preferences, and theme controls. Reminder alarms can create actionable Chrome notifications when the runtime grants notification support.
 
 ## Manual OAuth boundary
 
-The UI starts `chrome.identity.getAuthToken({ interactive: true })` only after
-the user clicks the account control. The token remains in Chrome's identity
-cache and is used by the worker for Gmail API calls; it is not written to
-`chrome.storage` or IndexedDB. The manifest contains the dedicated Google
+The UI starts `chrome.identity.getAuthToken({ interactive: true })` when the
+user chooses `Continue with Google` during onboarding or from the connection
+gate. The token remains in Chrome's identity cache and is used by the worker
+for Gmail API calls; it is not written to `chrome.storage` or IndexedDB. The manifest contains the dedicated Google
 extension client ID
 `542024114315-24dh9eo654fjs59on3i5dgosfaooulen.apps.googleusercontent.com`.
 Verify the consent/restricted-scope flow manually before release.

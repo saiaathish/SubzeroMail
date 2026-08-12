@@ -35,12 +35,7 @@ import type { OpenLoop } from "@subzero/core";
 import { sanitizeEmailHtml } from "@subzero/security/client";
 import { SubzeroMark } from "@subzero/ui";
 
-import {
-  cloneDemoThreads,
-  getDemoCounts,
-  type FocusBucket,
-  type FixtureThread,
-} from "../fixtures";
+import type { FocusBucket, FixtureThread } from "../fixtures";
 import { sendExtensionMessage } from "../runtime";
 import { providerDefaults, requestAIOriginPermission } from "../ai";
 import {
@@ -53,6 +48,7 @@ import {
 
 type View = "all" | FocusBucket | "loops" | "ask";
 type ComposeMode = "new" | "reply" | "reply-all";
+type ConnectionStatus = "idle" | "connecting" | "cancelled" | "error";
 
 const VIEW_LABELS: Record<View, string> = {
   all: "All mail",
@@ -89,14 +85,126 @@ function formatSyncTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+interface ConnectionGateProps {
+  theme: Theme;
+  status: ConnectionStatus;
+  message: string | null;
+  notice: string | null;
+  onConnect: () => void;
+  onToggleTheme: () => void;
+}
+
+function ConnectionGate({
+  theme,
+  status,
+  message,
+  notice,
+  onConnect,
+  onToggleTheme,
+}: ConnectionGateProps) {
+  const isConnecting = status === "connecting";
+  const feedbackTone = status === "cancelled" ? "cancelled" : "error";
+
+  return (
+    <main className="connection-gate">
+      <header className="connection-gate-header">
+        <SubzeroMark showName name="SUBZERO" label="Subzero Mail extension" />
+        <button
+          className="icon-button"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          onClick={onToggleTheme}
+        >
+          {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+        </button>
+      </header>
+
+      <section className="connection-gate-card" aria-labelledby="gate-title">
+        <div className="connection-gate-mark" aria-hidden="true">
+          <Inbox size={24} />
+          <span />
+        </div>
+        <span className="eyebrow">GMAIL / LIVE CONNECTION</span>
+        <h1 id="gate-title">Your inbox starts with a connection.</h1>
+        <p className="connection-gate-intro">
+          Bring your live Gmail inbox into Subzero for focused triage, search,
+          and follow-up. Google access is required before any mail appears.
+        </p>
+
+        <div className="connection-gate-points">
+          <div>
+            <ShieldCheck size={17} />
+            <span>
+              <strong>Gmail stays canonical</strong>
+              <small>
+                Subzero reads and updates your Gmail account through the
+                official API.
+              </small>
+            </span>
+          </div>
+          <div>
+            <Inbox size={17} />
+            <span>
+              <strong>Only your account, when you choose</strong>
+              <small>
+                Nothing is loaded until you approve the Google connection.
+              </small>
+            </span>
+          </div>
+        </div>
+
+        <div className="connection-gate-actions">
+          <p>
+            <ShieldCheck size={14} />
+            Google authorization opens in a secure Chrome window.
+          </p>
+          <button
+            className="send-button connection-gate-button"
+            onClick={onConnect}
+            disabled={isConnecting}
+            aria-busy={isConnecting}
+          >
+            {isConnecting ? (
+              <>
+                <RefreshCw size={15} className="spin" /> Connecting…
+              </>
+            ) : (
+              <>
+                <ChevronRight size={15} /> Continue with Google
+              </>
+            )}
+          </button>
+        </div>
+
+        {notice ? (
+          <p className="connection-gate-feedback success" role="status">
+            {notice}
+          </p>
+        ) : message ? (
+          <p
+            className={`connection-gate-feedback ${feedbackTone}`}
+            role="status"
+          >
+            {message}
+          </p>
+        ) : null}
+      </section>
+
+      <p className="connection-gate-footer">
+        Subzero uses Gmail API access only. Your local cache remains on this
+        device.
+      </p>
+    </main>
+  );
+}
+
 export function App() {
   const [appState, setAppState] = useState<ExtensionState>(
     DEFAULT_EXTENSION_STATE,
   );
-  const [threads, setThreads] = useState<FixtureThread[]>(cloneDemoThreads);
+  const [threads, setThreads] = useState<FixtureThread[]>([]);
   const [view, setView] = useState<View>("all");
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState("fixture-maya-contract");
+  const [selectedId, setSelectedId] = useState("");
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
   const [composeTo, setComposeTo] = useState("");
   const [composeCc, setComposeCc] = useState("");
@@ -106,10 +214,14 @@ export function App() {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [gmailDisclosureOpen, setGmailDisclosureOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>("idle");
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(
+    null,
+  );
   const [isDrafting, setIsDrafting] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [searchingRemote, setSearchingRemote] = useState(false);
@@ -156,24 +268,58 @@ export function App() {
   const composeRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    void Promise.all([
-      sendExtensionMessage<ExtensionState>({ type: "app/get-state" }),
-      sendExtensionMessage<FixtureThread[]>({ type: "mail/get-threads" }),
-    ])
-      .then(([stateResponse, threadResponse]) => {
-        if (stateResponse.ok && stateResponse.data) {
-          setAppState(stateResponse.data);
+    let cancelled = false;
+
+    async function loadApp() {
+      try {
+        const stateResponse = await sendExtensionMessage<ExtensionState>({
+          type: "app/get-state",
+        });
+        if (cancelled) return;
+
+        if (!stateResponse.ok || !stateResponse.data) {
+          setConnectionStatus("error");
+          setConnectionMessage(
+            "Subzero could not check your Gmail connection. Try again to continue.",
+          );
+          return;
         }
-        if (threadResponse.ok && threadResponse.data?.length) {
+
+        const nextState = stateResponse.data;
+        setAppState(nextState);
+
+        if (nextState.account.mode !== "connected") return;
+
+        const threadResponse = await sendExtensionMessage<FixtureThread[]>({
+          type: "mail/get-threads",
+        });
+        if (cancelled) return;
+
+        if (threadResponse.ok && threadResponse.data) {
           setThreads(threadResponse.data);
-          setSelectedId(threadResponse.data[0]?.id ?? selectedId);
+          setSelectedId(threadResponse.data[0]?.id ?? "");
         }
-      })
-      .catch(() => showNotice("The local inbox could not be loaded."))
-      .finally(() => setIsLoading(false));
+      } catch {
+        if (!cancelled) {
+          setConnectionStatus("error");
+          setConnectionMessage(
+            "Subzero could not check your Gmail connection. Try again to continue.",
+          );
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    void loadApp();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
+    if (appState.account.mode !== "connected") return;
+
     void sendExtensionMessage<ExtensionAISettings>({ type: "ai/get-settings" })
       .then((response) => {
         if (!response.ok || !response.data) return;
@@ -193,7 +339,7 @@ export function App() {
         setReminders(response.data.reminders);
       })
       .catch(() => undefined);
-  }, []);
+  }, [appState.account.mode]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = appState.theme;
@@ -263,7 +409,18 @@ export function App() {
 
   const selectedThread =
     threads.find((thread) => thread.id === selectedId) ?? visibleThreads[0];
-  const counts = useMemo(() => getDemoCounts(threads), [threads]);
+  const counts = useMemo(
+    () => ({
+      total: threads.filter((thread) => !thread.archived).length,
+      needsReply: threads.filter(
+        (thread) => !thread.archived && thread.bucket === "needs_reply",
+      ).length,
+      waiting: threads.filter(
+        (thread) => !thread.archived && thread.bucket === "waiting",
+      ).length,
+    }),
+    [threads],
+  );
   const openLoopCount = loops.filter((loop) => loop.status === "open").length;
 
   useEffect(() => {
@@ -398,8 +555,6 @@ export function App() {
           showNotice("Archived in Gmail.");
         }
       });
-    } else {
-      showNotice("Archived in the demo fixture only.");
     }
   }
 
@@ -435,8 +590,6 @@ export function App() {
           );
         }
       });
-    } else {
-      showNotice("Unread state changed in the demo fixture.");
     }
   }
 
@@ -475,8 +628,6 @@ export function App() {
       });
       return;
     }
-
-    showNotice(nextStarred ? "Starred in the demo fixture." : "Star removed.");
   }
 
   function openCompose(mode: ComposeMode) {
@@ -526,85 +677,100 @@ export function App() {
     if (response.ok && response.data) setAppState(response.data);
   }
 
-  async function syncDemo() {
+  async function syncGmail() {
     setIsSyncing(true);
-    if (appState.account.mode === "connected") {
-      const response = await sendExtensionMessage<{
-        threads: FixtureThread[];
-        email: string;
-      }>({ type: "mail/sync" });
-      if (response.ok && response.data) {
-        setThreads(response.data.threads);
-        setAppState((current) => ({
-          ...current,
-          account: {
-            ...current.account,
-            mode: "connected",
-            email: response.data?.email ?? current.account.email,
-            label: response.data?.email ?? current.account.label,
-          },
-          sync: {
-            ...current.sync,
-            status: "idle",
-            lastSyncedAt: new Date().toISOString(),
-            threadCount: response.data?.threads.length,
-            detail: "Gmail inbox refreshed and cached locally.",
-          },
-        }));
-        showNotice("Gmail inbox refreshed.");
-      } else {
-        showNotice(response.error?.message ?? "Gmail refresh is unavailable.");
-      }
+    const response = await sendExtensionMessage<{
+      threads: FixtureThread[];
+      email: string;
+    }>({ type: "mail/sync" });
+    if (response.ok && response.data) {
+      const synced = response.data;
+      setThreads(synced.threads);
+      setSelectedId(synced.threads[0]?.id ?? "");
+      setAppState((current) => ({
+        ...current,
+        account: {
+          ...current.account,
+          mode: "connected",
+          email: synced.email || current.account.email,
+          label: synced.email || current.account.label,
+        },
+        sync: {
+          ...current.sync,
+          status: "idle",
+          lastSyncedAt: new Date().toISOString(),
+          threadCount: synced.threads.length,
+          detail: "Gmail inbox refreshed and cached locally.",
+        },
+      }));
+      showNotice("Gmail inbox refreshed.");
     } else {
-      const response = await sendExtensionMessage<ExtensionState>({
-        type: "app/sync-demo",
-      });
-      if (response.ok && response.data) {
-        setAppState(response.data);
-        setThreads(cloneDemoThreads());
-        showNotice("Demo fixture refreshed locally. Gmail was not contacted.");
-      } else {
-        showNotice("Demo refresh is unavailable in this environment.");
-      }
+      showNotice(response.error?.message ?? "Gmail refresh is unavailable.");
     }
     setIsSyncing(false);
   }
 
   async function beginOAuth() {
-    setGmailDisclosureOpen(false);
-    const response = await sendExtensionMessage<{
-      status: string;
-      message: string;
-    }>({ type: "oauth/start" });
-    if (response.ok && response.data) {
-      showNotice(response.data.message);
-      if (response.data.status === "completed") {
-        const next = await sendExtensionMessage<{
-          threads: FixtureThread[];
-          email: string;
-        }>({ type: "mail/sync" });
-        const synced = next.data;
-        if (next.ok && synced && synced.threads.length > 0) {
-          setThreads(synced.threads);
-          setAppState((current) => ({
-            ...current,
-            account: {
-              ...current.account,
-              mode: "connected",
-              email: synced.email,
-              label: synced.email,
-            },
-            sync: {
-              ...current.sync,
-              status: "idle",
-              threadCount: synced.threads.length,
-              detail: "Gmail inbox refreshed.",
-            },
-          }));
-        }
+    setConnectionStatus("connecting");
+    setConnectionMessage(null);
+    try {
+      const response = await sendExtensionMessage<{
+        status: string;
+        message: string;
+        threads?: FixtureThread[];
+        email?: string;
+      }>({ type: "oauth/start" });
+      if (!response.ok || !response.data) {
+        setConnectionStatus("error");
+        setConnectionMessage(
+          response.error?.message ??
+            "Google connection could not start. Try again.",
+        );
+        return;
       }
-    } else {
-      showNotice("OAuth is unavailable in this environment.");
+
+      const result = response.data;
+      if (
+        result.status === "completed" &&
+        typeof result.email === "string" &&
+        Array.isArray(result.threads)
+      ) {
+        const email = result.email;
+        const threads = result.threads;
+        setThreads(threads);
+        setSelectedId(threads[0]?.id ?? "");
+        setAppState((current) => ({
+          ...current,
+          account: {
+            ...current.account,
+            mode: "connected",
+            email,
+            label: email,
+            detail: "Live Gmail API connected with Chrome identity token.",
+          },
+          sync: {
+            ...current.sync,
+            status: "idle",
+            lastSyncedAt: new Date().toISOString(),
+            threadCount: threads.length,
+            detail:
+              "Gmail inbox refreshed. Full message bodies load on demand.",
+          },
+        }));
+        setConnectionStatus("idle");
+        setConnectionMessage(null);
+        return;
+      }
+
+      const cancelled = result.status === "cancelled";
+      setConnectionStatus(cancelled ? "cancelled" : "error");
+      setConnectionMessage(
+        result.message ||
+          "Google authorization completed, but Gmail could not be loaded. Try again.",
+      );
+    } catch {
+      setConnectionStatus("error");
+      setConnectionMessage("Google connection could not start. Try again.");
     }
   }
 
@@ -618,8 +784,8 @@ export function App() {
     }
 
     setAppState(response.data);
-    setThreads(cloneDemoThreads());
-    setSelectedId("fixture-maya-contract");
+    setThreads([]);
+    setSelectedId("");
     setQuery("");
     setComposeMode(null);
     setDraftId(null);
@@ -869,7 +1035,20 @@ export function App() {
   }
 
   if (isLoading) {
-    return <main className="loading-screen">Loading the local inbox…</main>;
+    return <main className="loading-screen">Checking Gmail connection…</main>;
+  }
+
+  if (appState.account.mode !== "connected") {
+    return (
+      <ConnectionGate
+        theme={appState.theme}
+        status={connectionStatus}
+        message={connectionMessage}
+        notice={notice}
+        onConnect={() => void beginOAuth()}
+        onToggleTheme={() => void toggleTheme()}
+      />
+    );
   }
 
   return (
@@ -940,7 +1119,7 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <span className="eyebrow">LOCAL INBOX</span>
+            <span className="eyebrow">GMAIL INBOX</span>
             <h1>{VIEW_LABELS[view]}</h1>
           </div>
           <div className="topbar-actions">
@@ -948,7 +1127,7 @@ export function App() {
               <Search size={15} />
               <input
                 ref={searchRef}
-                aria-label="Search demo inbox"
+                aria-label="Search Gmail"
                 placeholder="Search mail"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -993,13 +1172,7 @@ export function App() {
             <div className="account-actions">
               <button
                 className="account-chip"
-                onClick={() => {
-                  if (appState.account.mode === "connected") {
-                    setAccountMenuOpen((open) => !open);
-                  } else {
-                    setGmailDisclosureOpen(true);
-                  }
-                }}
+                onClick={() => setAccountMenuOpen((open) => !open)}
                 aria-expanded={accountMenuOpen}
               >
                 <span className="account-avatar">
@@ -1025,7 +1198,7 @@ export function App() {
 
         <div className="status-strip">
           <span className="status-live">
-            <span /> {appState.sync.status === "demo" ? "Demo mode" : "Ready"}
+            <span /> Connected
           </span>
           <span>{appState.sync.detail}</span>
           <span className="status-time">
@@ -1033,15 +1206,11 @@ export function App() {
           </span>
           <button
             className="text-button"
-            onClick={() => void syncDemo()}
+            onClick={() => void syncGmail()}
             disabled={isSyncing}
           >
             <RefreshCw size={14} className={isSyncing ? "spin" : ""} />
-            {isSyncing
-              ? "Refreshing"
-              : appState.account.mode === "connected"
-                ? "Refresh Gmail"
-                : "Refresh demo"}
+            {isSyncing ? "Refreshing" : "Refresh Gmail"}
           </button>
         </div>
 
@@ -1207,7 +1376,7 @@ export function App() {
           </section>
         ) : (
           <div className="inbox-grid">
-            <section className="thread-list" aria-label="Demo inbox threads">
+            <section className="thread-list" aria-label="Gmail threads">
               <div className="list-heading">
                 <span>{visibleThreads.length} threads</span>
                 <span className="list-hint">
@@ -1447,12 +1616,6 @@ export function App() {
                       ) : (
                         <p>{message.textBody ?? message.preview}</p>
                       )}
-                      {selectedThread.source === "demo" ? (
-                        <p className="message-muted">
-                          Demo content stays local. Connect Gmail to load your
-                          account&apos;s message body.
-                        </p>
-                      ) : null}
                     </article>
                   ))}
                   {composeMode ? (
@@ -1710,83 +1873,6 @@ export function App() {
         </div>
       ) : null}
 
-      {gmailDisclosureOpen ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={() => setGmailDisclosureOpen(false)}
-        >
-          <section
-            className="settings-dialog gmail-disclosure"
-            role="dialog"
-            aria-label="Gmail access"
-            aria-modal="true"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="settings-dialog-head">
-              <div>
-                <span className="eyebrow">GMAIL / EXPLICIT ACCESS</span>
-                <h2>Connect your inbox</h2>
-              </div>
-              <button
-                className="icon-button"
-                aria-label="Close Gmail access"
-                onClick={() => setGmailDisclosureOpen(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <p className="settings-copy">
-              Subzero is a Gmail productivity client. Google access is used to
-              triage, search, read, draft, and follow up on your email. It does
-              not inject into or scrape the Gmail website.
-            </p>
-            <div className="disclosure-list">
-              <div>
-                <strong>What is accessed</strong>
-                <span>
-                  Gmail message metadata, labels, and selected message bodies.
-                </span>
-              </div>
-              <div>
-                <strong>Where it stays</strong>
-                <span>
-                  Mailbox cache stays in this extension&apos;s local IndexedDB;
-                  Google keeps the canonical mailbox.
-                </span>
-              </div>
-              <div>
-                <strong>When AI sees email</strong>
-                <span>
-                  Only after you configure BYOK, and only the bounded context
-                  needed for that action goes to your selected provider.
-                </span>
-              </div>
-            </div>
-            <div className="settings-foot disclosure-foot">
-              <span className="settings-status">
-                <ShieldCheck size={14} /> Sign out clears the local mailbox
-                cache.
-              </span>
-              <div className="composer-actions">
-                <button
-                  className="text-button"
-                  onClick={() => setGmailDisclosureOpen(false)}
-                >
-                  Stay in demo
-                </button>
-                <button
-                  className="send-button"
-                  onClick={() => void beginOAuth()}
-                >
-                  <ChevronRight size={14} /> Continue with Google
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
       {paletteOpen ? (
         <div
           className="modal-backdrop"
@@ -1873,11 +1959,11 @@ export function App() {
               <button
                 onClick={() => {
                   setPaletteOpen(false);
-                  void syncDemo();
+                  void syncGmail();
                 }}
               >
                 <RefreshCw size={15} />
-                <span>Refresh demo fixture</span>
+                <span>Refresh Gmail</span>
                 <kbd>↵</kbd>
               </button>
             </div>

@@ -1,5 +1,3 @@
-import type { AccountState } from "./types";
-
 export type FocusBucket = "priority" | "needs_reply" | "waiting" | "other";
 
 export interface FixtureThread {
@@ -128,22 +126,3 @@ const FIXTURE_THREADS: readonly FixtureThread[] = [
 export function cloneDemoThreads(): FixtureThread[] {
   return FIXTURE_THREADS.map((thread) => ({ ...thread }));
 }
-
-export function getDemoCounts(threads: readonly FixtureThread[]) {
-  return {
-    total: threads.filter((thread) => !thread.archived).length,
-    needsReply: threads.filter(
-      (thread) => !thread.archived && thread.bucket === "needs_reply",
-    ).length,
-    waiting: threads.filter(
-      (thread) => !thread.archived && thread.bucket === "waiting",
-    ).length,
-  };
-}
-
-export const DEMO_ACCOUNT: AccountState = {
-  mode: "demo",
-  email: "you@example.com",
-  label: "Demo fixture",
-  detail: "Local-only inbox. Gmail is not connected.",
-};

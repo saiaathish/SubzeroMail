@@ -113,7 +113,7 @@ export async function startIdentityOAuth(
   if (!identity?.launchWebAuthFlow) {
     return {
       status: "unavailable",
-      message: "Chrome identity is unavailable in this demo environment.",
+      message: "Chrome identity is unavailable in this profile.",
     };
   }
 

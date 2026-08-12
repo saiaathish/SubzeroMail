@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { cloneDemoThreads } from "../../apps/extension/src/fixtures";
 import {
   askExtensionInbox,
   clearAI,
@@ -7,6 +8,7 @@ import {
   detectExtensionLoops,
   draftExtensionReply,
   listExtensionLoops,
+  setExtensionAIMailSourceForTests,
   summarizeExtensionThread,
 } from "../../apps/extension/src/ai";
 import {
@@ -16,18 +18,45 @@ import {
 import { updateExtensionState } from "../../apps/extension/src/platform/storage";
 import { loadExtensionState } from "../../apps/extension/src/platform/storage";
 
-async function resetDemoState(): Promise<void> {
+async function resetExtensionState(): Promise<void> {
   await clearAI();
   await updateExtensionState({
     ...DEFAULT_EXTENSION_STATE,
-    account: DEFAULT_EXTENSION_STATE.account,
-    sync: DEFAULT_EXTENSION_STATE.sync,
+    account: {
+      mode: "connected",
+      email: "owner@example.com",
+      label: "Gmail connected",
+      detail: "Connected deterministic test mailbox",
+    },
+    sync: {
+      status: "idle",
+      lastSyncedAt: new Date().toISOString(),
+      detail: "Connected deterministic test mailbox",
+      threadCount: cloneDemoThreads().length,
+    },
     ai: DEFAULT_EXTENSION_STATE.ai,
   } satisfies ExtensionState);
 }
 
+beforeEach(async () => {
+  // jsdom exposes a partial IndexedDB global without a usable implementation.
+  // Force the AI unit boundary onto its private in-memory store; the extension
+  // browser tests cover the real IndexedDB cache separately.
+  vi.stubGlobal("indexedDB", undefined);
+  const threads = cloneDemoThreads();
+  setExtensionAIMailSourceForTests({
+    getThreads: async () => threads,
+    getThread: async (threadId) =>
+      threads.find((thread) => thread.id === threadId),
+  });
+  await resetExtensionState();
+});
+
 afterEach(async () => {
-  await resetDemoState();
+  await clearAI();
+  await updateExtensionState(DEFAULT_EXTENSION_STATE);
+  setExtensionAIMailSourceForTests(null);
+  vi.unstubAllGlobals();
 });
 
 describe("extension local AI surfaces", () => {
