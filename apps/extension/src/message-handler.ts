@@ -38,8 +38,88 @@ import {
 } from "./platform/oauth";
 import { ExtensionDatabase } from "@subzero/storage/extension";
 import { DEFAULT_EXTENSION_STATE, type ExtensionState } from "./types";
-import { loadExtensionState, updateExtensionState } from "./platform/storage";
+import {
+  chromeStorageAdapter,
+  EXTENSION_STATE_KEY,
+  loadExtensionState,
+  updateExtensionState,
+} from "./platform/storage";
 import { openOrFocusApp } from "./platform/tabs";
+
+type StateWithUnknownFields = {
+  account?: {
+    mode?: unknown;
+    email?: unknown;
+    label?: unknown;
+    detail?: unknown;
+  };
+  sync?: { status?: unknown };
+  preferences?: { onboardingComplete?: unknown };
+};
+
+function hasPersistedStateShape(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const state = value as StateWithUnknownFields;
+  return Boolean(
+    state.account &&
+    typeof state.account === "object" &&
+    state.sync &&
+    typeof state.sync === "object" &&
+    state.preferences &&
+    typeof state.preferences === "object",
+  );
+}
+
+/**
+ * Move pre-release fixture state to the real install baseline. This lives at
+ * the privileged message boundary because the storage normalizer is shared
+ * with fixture-only unit helpers and must retain their legacy values.
+ */
+export async function migrateExtensionState(): Promise<ExtensionState> {
+  const stored = await chromeStorageAdapter.get<unknown>(
+    EXTENSION_STATE_KEY,
+    undefined,
+  );
+  const current = await loadExtensionState();
+  const account = current.account as StateWithUnknownFields["account"];
+  const sync = current.sync as StateWithUnknownFields["sync"];
+  const storedState = stored as StateWithUnknownFields | undefined;
+  const storedAccountMode = storedState?.account?.mode;
+  const storedSyncStatus = storedState?.sync?.status;
+  const accountMode = account?.mode;
+  const syncStatus = sync?.status;
+  const accountIsConnected = accountMode === "connected";
+  const accountIsManualOAuth = accountMode === "manual_oauth";
+  const accountIsDisconnected = accountMode === "disconnected";
+  const accountNeedsReset =
+    !accountIsConnected &&
+    !accountIsManualOAuth &&
+    (!accountIsDisconnected ||
+      storedAccountMode === "demo" ||
+      account?.email !== null ||
+      account?.label === "Demo fixture" ||
+      (typeof account?.detail === "string" &&
+        account.detail.toLowerCase().includes("fixture")));
+  const syncNeedsReset =
+    storedSyncStatus === "demo" ||
+    (syncStatus !== "syncing" &&
+      syncStatus !== "idle" &&
+      syncStatus !== "unavailable");
+  const shouldPersistBaseline =
+    !hasPersistedStateShape(stored) || accountNeedsReset || syncNeedsReset;
+
+  if (!shouldPersistBaseline) return current;
+
+  return updateExtensionState({
+    ...(accountNeedsReset ? { account: DEFAULT_EXTENSION_STATE.account } : {}),
+    ...(accountNeedsReset || syncNeedsReset
+      ? { sync: DEFAULT_EXTENSION_STATE.sync }
+      : {}),
+    ...(accountNeedsReset
+      ? { preferences: { onboardingComplete: false } }
+      : {}),
+  });
+}
 
 function toErrorResponse(
   error: unknown,
@@ -62,6 +142,8 @@ function toErrorResponse(
 export async function handleExtensionMessage(
   message: ExtensionMessage,
 ): Promise<ExtensionResponse> {
+  await migrateExtensionState();
+
   switch (message.type) {
     case "app/get-state":
       return successResponse(await loadExtensionState());
@@ -70,16 +152,6 @@ export async function handleExtensionMessage(
     case "app/set-theme":
       return successResponse(
         await updateExtensionState({ theme: message.theme }),
-      );
-    case "app/sync-demo":
-      return successResponse(
-        await updateExtensionState({
-          sync: {
-            status: "demo",
-            lastSyncedAt: new Date().toISOString(),
-            detail: "Demo fixture refreshed locally. Gmail was not contacted.",
-          },
-        }),
       );
     case "gmail/get-context":
       return successResponse((await loadExtensionState()).gmail);
@@ -97,6 +169,15 @@ export async function handleExtensionMessage(
         opened: await openOrFocusApp(message.threadId),
       });
     case "settings/update-preferences":
+      if (
+        message.preferences.onboardingComplete === true &&
+        (await loadExtensionState()).account.mode !== "connected"
+      ) {
+        return errorResponse(
+          "onboarding_requires_connection",
+          "Connect Gmail before completing onboarding.",
+        );
+      }
       return successResponse(
         await updateExtensionState({ preferences: message.preferences }),
       );

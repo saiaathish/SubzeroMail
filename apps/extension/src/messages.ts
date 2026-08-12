@@ -9,7 +9,6 @@ export type ExtensionMessage =
   | { type: "app/get-state" }
   | { type: "app/open" }
   | { type: "app/set-theme"; theme: Theme }
-  | { type: "app/sync-demo" }
   | { type: "gmail/get-context" }
   | { type: "gmail/context"; context: GmailPageContext }
   | { type: "gmail/open-in-subzero"; threadId?: string }
@@ -138,7 +137,6 @@ export function isExtensionMessage(value: unknown): value is ExtensionMessage {
   switch (message.type) {
     case "app/get-state":
     case "app/open":
-    case "app/sync-demo":
     case "gmail/get-context":
     case "auth/sign-out":
     case "ai/get-settings":

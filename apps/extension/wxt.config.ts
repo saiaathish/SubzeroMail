@@ -4,7 +4,7 @@ export default defineConfig({
   manifest: {
     name: "Subzero Mail",
     description:
-      "A keyboard-first Gmail companion with a local demo inbox and an explicit OAuth boundary.",
+      "A keyboard-first Gmail companion with an explicit Google authorization boundary.",
     permissions: [
       "identity",
       "storage",

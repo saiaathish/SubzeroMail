@@ -89,6 +89,26 @@ export function isExtensionAIError(value: unknown): value is ExtensionAIError {
 let activeAI: ActiveAI | null = null;
 const memoryExtensionDatabase = new MemoryExtensionDatabase();
 
+export interface ExtensionAIMailSource {
+  getThreads(limit: number): Promise<FixtureThread[]>;
+  getThread(threadId: string): Promise<FixtureThread | undefined>;
+}
+
+let extensionAIMailSource: ExtensionAIMailSource = {
+  getThreads: getExtensionThreads,
+  getThread: getExtensionThread,
+};
+
+/** Test-only source injection; normal extension callers always use Gmail. */
+export function setExtensionAIMailSourceForTests(
+  source: ExtensionAIMailSource | null,
+): void {
+  extensionAIMailSource = source ?? {
+    getThreads: getExtensionThreads,
+    getThread: getExtensionThread,
+  };
+}
+
 function assertNoLineBreaks(value: string, label: string): void {
   if (/\r|\n/.test(value)) {
     throw new ExtensionAIError(
@@ -343,7 +363,7 @@ async function getThreadContext(threadId: string): Promise<{
   thread: FixtureThread;
   context: MailThreadContext;
 }> {
-  const thread = await getExtensionThread(threadId);
+  const thread = await extensionAIMailSource.getThread(threadId);
   if (!thread) {
     throw new ExtensionAIError(
       "thread_not_found",
@@ -582,10 +602,10 @@ export async function detectExtensionLoops(): Promise<{
   reminders: ExtensionReminder[];
 }> {
   const { id: account, email } = await accountId();
-  const threads = await getExtensionThreads(40);
+  const threads = await extensionAIMailSource.getThreads(40);
 
   for (const threadSummary of threads) {
-    const thread = await getExtensionThread(threadSummary.id);
+    const thread = await extensionAIMailSource.getThread(threadSummary.id);
     if (!thread) continue;
     let candidates = deterministicOpenLoopCandidates(thread, email);
     if (candidates.length === 0 && activeAI) {
@@ -678,11 +698,11 @@ function questionTokens(question: string): string[] {
 async function retrieveInboxEvidence(
   question: string,
 ): Promise<AskInboxEvidence["evidence"]> {
-  const summaries = await getExtensionThreads(40);
+  const summaries = await extensionAIMailSource.getThreads(40);
   const tokens = questionTokens(question);
   const ranked: Array<{ score: number; thread: FixtureThread }> = [];
   for (const summary of summaries) {
-    const thread = await getExtensionThread(summary.id);
+    const thread = await extensionAIMailSource.getThread(summary.id);
     if (!thread) continue;
     const text = searchableText(thread);
     const score = tokens.reduce(

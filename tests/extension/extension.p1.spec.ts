@@ -9,6 +9,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { seedConnectedMailbox } from "./extension-fixtures";
+
 async function openExtension(): Promise<{
   context: BrowserContext;
   app: Page;
@@ -34,7 +36,9 @@ async function openExtension(): Promise<{
   const extensionId = new URL(worker.url()).host;
   const app = await context.newPage();
   await app.goto(`chrome-extension://${extensionId}/app.html`);
-  await expect(app.getByText("LOCAL INBOX")).toBeVisible();
+  await seedConnectedMailbox(app);
+  await app.reload();
+  await expect(app.getByText("GMAIL INBOX")).toBeVisible();
   return { context, app, profile };
 }
 
@@ -46,6 +50,7 @@ test("extension P1 surfaces stay local, grounded, and actionable", async () => {
   });
 
   try {
+    await app.getByRole("button", { name: /Maya Chen/ }).click();
     await app.getByRole("button", { name: "Generate summary" }).click();
     await expect(
       app
@@ -86,31 +91,7 @@ test("extension P1 surfaces stay local, grounded, and actionable", async () => {
 test("sign out clears the connected account state while preserving theme", async () => {
   const { context, app, profile } = await openExtension();
   try {
-    await app.evaluate(async () => {
-      const extensionChrome = (
-        globalThis as typeof globalThis & {
-          chrome: {
-            storage: { local: { set(value: unknown): Promise<void> } };
-          };
-        }
-      ).chrome;
-      await extensionChrome.storage.local.set({
-        "subzero.extension.state.v1": {
-          theme: "light",
-          account: {
-            mode: "connected",
-            email: "owner@example.com",
-            label: "Gmail connected",
-            detail: "Fixture account",
-          },
-          sync: {
-            status: "idle",
-            lastSyncedAt: new Date().toISOString(),
-            detail: "Fixture account",
-          },
-        },
-      });
-    });
+    await seedConnectedMailbox(app, "light");
     await app.reload();
     await expect(
       app.getByRole("button", { name: /Gmail connected/ }),
@@ -123,8 +104,12 @@ test("sign out clears the connected account state while preserving theme", async
       app.getByText("Signed out. Local Gmail cache cleared."),
     ).toBeVisible();
     await expect(
-      app.getByRole("button", { name: /Demo fixture/ }),
+      app.getByRole("button", { name: /Continue with Google/i }),
     ).toBeVisible();
+    await expect(app.getByText("Demo fixture")).toHaveCount(0);
+    await expect(
+      app.getByText("Your inbox starts with a connection."),
+    ).toHaveCount(1);
     await expect(app.locator("html")).toHaveAttribute("data-theme", "light");
   } finally {
     await context.close();

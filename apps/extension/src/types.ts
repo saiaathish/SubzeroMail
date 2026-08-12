@@ -10,7 +10,7 @@ export interface ExtensionAISettings {
   sessionConfigured: boolean;
 }
 
-export type AccountMode = "demo" | "connected" | "manual_oauth";
+export type AccountMode = "disconnected" | "connected" | "manual_oauth";
 
 export interface AccountState {
   mode: AccountMode;
@@ -19,7 +19,7 @@ export interface AccountState {
   detail: string;
 }
 
-export type SyncStatus = "demo" | "syncing" | "idle" | "unavailable";
+export type SyncStatus = "syncing" | "idle" | "unavailable";
 
 export type SubzeroExperience = "gmail-only" | "standalone-only" | "both";
 
@@ -65,15 +65,15 @@ export interface ExtensionState {
 export const DEFAULT_EXTENSION_STATE: ExtensionState = {
   theme: "dark",
   account: {
-    mode: "demo",
-    email: "you@example.com",
-    label: "Demo fixture",
-    detail: "Local-only inbox. Gmail is not connected.",
+    mode: "disconnected",
+    email: null,
+    label: "Gmail not connected",
+    detail: "Connect Gmail to load your inbox.",
   },
   sync: {
-    status: "demo",
+    status: "unavailable",
     lastSyncedAt: null,
-    detail: "Using the bundled fixture. Gmail was not contacted.",
+    detail: "Gmail is not connected. Connect an account to sync mail.",
   },
   ai: {
     provider: "openai-compatible",

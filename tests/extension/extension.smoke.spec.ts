@@ -29,13 +29,16 @@ test("loads the MV3 full-page client and useful popup", async () => {
     const extensionId = new URL(worker.url()).host;
     const app = await context.newPage();
     await app.goto(`chrome-extension://${extensionId}/app.html`);
-    await expect(app.getByText("LOCAL INBOX")).toBeVisible();
+    // A fresh install must stop at the Gmail connection gate. This deliberately
+    // observes the real control without starting OAuth.
     await expect(
-      app.getByRole("button", { name: "Needs Reply" }),
+      app.getByRole("button", { name: /Continue with Google/i }),
     ).toBeVisible();
     await expect(
-      app.getByRole("textbox", { name: "Search demo inbox" }),
-    ).toBeVisible();
+      app.getByText("Your inbox starts with a connection."),
+    ).toHaveCount(1);
+    await expect(app.getByText("Demo fixture")).toHaveCount(0);
+    await expect(app.getByText(/Maya Chen/)).toHaveCount(0);
 
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${extensionId}/popup.html`);
@@ -44,11 +47,12 @@ test("loads the MV3 full-page client and useful popup", async () => {
       popup.getByText("Make Gmail faster without replacing it."),
     ).toBeVisible();
     await popup.getByRole("radio", { name: /Both/ }).check();
-    await popup.getByRole("button", { name: "Continue" }).click();
-    await expect(popup.getByText("Gmail productivity client")).toBeVisible();
+    // Onboarding exposes the actual Google connection control. Do not click
+    // it here: this test must remain OAuth-free and network-independent.
     await expect(
-      popup.getByRole("button", { name: /Open Subzero/ }),
+      popup.getByRole("button", { name: /Continue with Google/i }),
     ).toBeVisible();
+    await expect(popup.getByText("Demo fixture")).toHaveCount(0);
   } finally {
     await context?.close();
     await rm(profile, { recursive: true, force: true });

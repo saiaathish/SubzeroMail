@@ -28,7 +28,8 @@ export const chromeStorageAdapter = {
         return value;
       }
     } catch {
-      // The in-memory value keeps demo mode usable when Chrome storage is unavailable.
+      // The in-memory value keeps isolated non-extension tests usable when
+      // Chrome storage is unavailable.
     }
 
     return (memoryStorage.get(key) as T | undefined) ?? fallback;
@@ -42,7 +43,7 @@ export const chromeStorageAdapter = {
     try {
       await local.set({ [key]: value });
     } catch {
-      // The memory fallback is intentionally sufficient for local demo use.
+      // The memory fallback is intentionally sufficient for isolated tests.
     }
   },
 };

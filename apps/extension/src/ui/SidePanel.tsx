@@ -149,13 +149,55 @@ export function SidePanel() {
     if (response.ok && response.data) setState(response.data);
   }
 
+  async function openApp() {
+    const response = await sendExtensionMessage({ type: "app/open" });
+    if (!response.ok) {
+      setNotice(response.error?.message ?? "Could not open Subzero.");
+    }
+  }
+
+  if (state.account.mode !== "connected") {
+    return (
+      <main className="sidepanel-shell">
+        <header className="sidepanel-header">
+          <div>
+            <p className="eyebrow">SUBZERO</p>
+            <h1>Connect Gmail</h1>
+            <p className="muted">No mailbox is loaded yet.</p>
+          </div>
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={`Use ${state.theme === "dark" ? "light" : "dark"} theme`}
+            onClick={() =>
+              void setTheme(state.theme === "dark" ? "light" : "dark")
+            }
+          >
+            {state.theme === "dark" ? "☼" : "☾"}
+          </button>
+        </header>
+        <section className="rail-section connection-section">
+          <p className="eyebrow">GMAIL / LIVE CONNECTION</p>
+          <h2>Authorize Google to use the intelligence rail.</h2>
+          <p className="muted">
+            Subzero loads the intelligence rail only after you approve Gmail
+            access.
+          </p>
+          <button type="button" onClick={() => void openApp()}>
+            Connect Gmail in Subzero
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="sidepanel-shell">
       <header className="sidepanel-header">
         <div>
           <p className="eyebrow">SUBZERO</p>
           <h1>Intelligence rail</h1>
-          <p className="muted">{state.account.email ?? "Local inbox"}</p>
+          <p className="muted">{state.account.email ?? "Gmail account"}</p>
         </div>
         <button
           className="theme-toggle"

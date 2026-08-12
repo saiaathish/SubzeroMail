@@ -104,6 +104,160 @@ p {
   font-size: 13px;
 }
 
+.connection-gate {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  align-content: center;
+  gap: 22px;
+  padding: 32px;
+  color: var(--sz-text);
+  background:
+    radial-gradient(circle at 50% 12%, rgb(56 189 248 / 0.1), transparent 38%),
+    var(--sz-bg);
+}
+
+.connection-gate-header,
+.connection-gate-card,
+.connection-gate-footer {
+  width: min(620px, 100%);
+}
+
+.connection-gate-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.connection-gate-card {
+  border: 1px solid var(--sz-border-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sz-surface) 92%, transparent);
+  box-shadow: var(--sz-shadow);
+  padding: 34px;
+}
+
+.connection-gate-mark {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  margin-bottom: 22px;
+  border: 1px solid color-mix(in srgb, var(--sz-accent) 48%, var(--sz-border));
+  border-radius: 13px;
+  background: var(--sz-accent-soft);
+  color: var(--sz-accent);
+}
+
+.connection-gate-card h1 {
+  max-width: 480px;
+  margin-top: 10px;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 620;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
+}
+
+.connection-gate-intro {
+  max-width: 540px;
+  margin-top: 14px;
+  color: var(--sz-text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.connection-gate-points {
+  display: grid;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+.connection-gate-points > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-top: 1px solid var(--sz-border);
+  padding-top: 12px;
+}
+
+.connection-gate-points svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--sz-accent);
+}
+
+.connection-gate-points span {
+  display: grid;
+  gap: 3px;
+}
+
+.connection-gate-points strong {
+  color: var(--sz-text-secondary);
+  font-size: 12px;
+}
+
+.connection-gate-points small {
+  color: var(--sz-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.connection-gate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 28px;
+  border-top: 1px solid var(--sz-border);
+  padding-top: 20px;
+}
+
+.connection-gate-actions p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  color: var(--sz-text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.connection-gate-actions p svg {
+  flex: 0 0 auto;
+  color: var(--sz-success);
+}
+
+.connection-gate-button {
+  min-width: 190px;
+  padding: 11px 15px;
+}
+
+.connection-gate-feedback {
+  margin-top: 14px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--sz-danger) 10%, transparent);
+  padding: 10px 12px;
+  color: var(--sz-danger);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.connection-gate-feedback.cancelled {
+  background: color-mix(in srgb, var(--sz-warning) 10%, transparent);
+  color: var(--sz-warning);
+}
+
+.connection-gate-feedback.success {
+  background: color-mix(in srgb, var(--sz-success) 10%, transparent);
+  color: var(--sz-success);
+}
+
+.connection-gate-footer {
+  color: var(--sz-text-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
 .app-shell {
   display: flex;
   min-height: 100vh;

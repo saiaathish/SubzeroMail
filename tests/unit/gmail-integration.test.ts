@@ -273,6 +273,24 @@ describe("Gmail message boundary", () => {
     });
   });
 
+  it("does not complete onboarding before Gmail is connected", async () => {
+    const response = await handleExtensionMessage({
+      type: "settings/update-preferences",
+      preferences: { onboardingComplete: true },
+    });
+
+    expect(response).toEqual({
+      ok: false,
+      error: {
+        code: "onboarding_requires_connection",
+        message: "Connect Gmail before completing onboarding.",
+      },
+    });
+    expect((await loadExtensionState()).preferences.onboardingComplete).toBe(
+      false,
+    );
+  });
+
   it("clears stored Gmail context during sign out", async () => {
     await updateExtensionState({
       account: {
