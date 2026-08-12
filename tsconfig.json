@@ -16,10 +16,13 @@
     "baseUrl": ".",
     "paths": {
       "@subzero/ai": ["packages/ai/src/index.ts"],
+      "@subzero/core": ["packages/core/src/index.ts"],
       "@subzero/mail": ["packages/mail/src/index.ts"],
       "@subzero/security": ["packages/security/src/index.ts"],
       "@subzero/security/client": ["packages/security/src/client.ts"],
       "@subzero/storage": ["packages/storage/src/index.ts"],
+      "@subzero/storage/extension": ["packages/storage/src/extension.ts"],
+      "@subzero/ui": ["packages/ui/src/index.ts"],
       "@/*": ["apps/web/*"]
     }
   },

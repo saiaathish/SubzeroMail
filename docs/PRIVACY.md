@@ -6,7 +6,8 @@ Last reviewed: 2026-08-11.
 
 This document describes the current web application and the local WXT MV3
 extension. It is not evidence of Chrome Web Store approval or Google OAuth
-verification; the public GitHub copy is the policy URL saved in the draft.
+verification. The repository copy can supply policy text; a final public HTTPS
+policy URL and its store submission remain manual release gates.
 
 ## What Subzero Mail is
 
@@ -40,12 +41,30 @@ evidence.
 
 ## Extension-local boundary
 
-The extension requests `identity`, `storage`, `alarms`, and `permissions`, plus
-the narrow Gmail API origin `https://gmail.googleapis.com/*`. AI provider
-origins are optional and requested only from the visible BYOK settings gesture
-for the origin the user selected. It does not request `<all_urls>`, Gmail page
-access, browsing history, `scripting`, or `cookies`. The full-page client and
-popup use bundled executable code only.
+The extension requests `identity`, `storage`, `alarms`, `permissions`,
+`sidePanel`, and `notifications`. It has the narrow Gmail API host permission
+`https://gmail.googleapis.com/*` and a content script whose match is limited to
+`https://mail.google.com/*`. AI provider and loopback origins are optional and
+requested only from the visible BYOK settings gesture for the origin the user
+selected. It does not request `<all_urls>`, browsing history, `tabs`,
+`scripting`, or `cookies`. The full-page client, popup, and Side Panel use
+bundled executable code only.
+
+The Gmail content script runs in Chrome's isolated extension world. It reads
+the volatile Gmail DOM only to determine page context and placement, observes
+Gmail's SPA navigation, and mounts Subzero's contextual controls in Shadow DOM.
+Those controls include thread actions, inline summaries, compose drafting,
+quick replies, focus signals, and a command palette. Gmail DOM clicks are not
+the canonical mailbox mutation path: reads and mutations go through typed
+messages to the background worker and Gmail API. Sender-tab validation is
+applied to Gmail page context before the background worker accepts it.
+
+The Chrome Side Panel is an extension-owned surface for Now, Ask, source-linked
+answers, Open Loops, preferences, and themes. `chrome.alarms` schedules due
+work and `chrome.notifications` can display sparse reminder text with Open,
+Snooze, and Resolve actions. These are implemented local/demo surfaces; their
+behavior with a real Gmail account and clean Chrome profile remains a manual
+release gate.
 
 Gmail remains canonical. The extension stores recent thread metadata and sync
 cursors in IndexedDB, and small UI/account settings in `chrome.storage.local`.
@@ -79,8 +98,8 @@ The current sanitizer permits sanitized remote image URLs; the
 `allowRemoteImages` option is compatibility-only in the current source. A
 browser can therefore contact an image host when an email image is rendered.
 Do not describe the current web app as blocking all remote images. The visible
-**Load images** control is not proof of default network blocking. Extension
-The extension fetches selected Gmail thread bodies on demand, sanitizes them
+**Load images** control is not proof of default network blocking. The extension
+fetches selected Gmail thread bodies on demand, sanitizes them
 with the browser-safe `@subzero/security/client` surface, and renders the
 sanitized result. Remote image URLs remain permitted after sanitization and
 are loaded with `loading="lazy"` and `referrerpolicy="no-referrer"`; this is a
@@ -120,11 +139,14 @@ For privacy questions or requests about Subzero Mail, contact
 ## Chrome extension release status
 
 The local extension package, MV3 build, icon set, popup, full-page client,
-Gmail API adapter, local AI/P1 surfaces, and Chromium suite exist. The manifest
-contains the dedicated Chrome Extension OAuth client ID. Live Gmail OAuth,
-provider-network behavior, revoke/sign-out/deletion verification,
-restricted-scope approval, public HTTPS hosting, and store review remain
-manual blockers. Do not describe the extension as publicly available.
+Gmail-only content script, Shadow DOM contextual controls, Side Panel, reminder
+notifications, Gmail API adapter, local AI/P1 surfaces, and Chromium suite
+exist. The manifest contains the dedicated Chrome Extension OAuth client ID
+and the permissions described above. Live Gmail DOM/OAuth, clean-profile
+sign-out and revoke/deletion behavior, provider-network behavior, reminder
+delivery, final permission/data-use review, restricted-scope approval, public
+HTTPS hosting, signed upload, and store review remain manual blockers. Do not
+describe the extension as publicly available or Chrome Store-approved.
 
 The public web policy route is [`/privacy`](../apps/web/app/privacy/page.tsx).
 The repository does not currently evidence a fixed public deployment origin;

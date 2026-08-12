@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true
+  },
+  "include": [".wxt/wxt.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", ".output", "dist"]
+}

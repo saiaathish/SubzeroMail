@@ -1,5 +1,7 @@
 node_modules/
 .git/
+.wxt/
+.output/
 .next/
 coverage/
 playwright-report/
