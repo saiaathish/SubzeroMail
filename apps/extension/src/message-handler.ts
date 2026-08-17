@@ -457,7 +457,7 @@ export async function handleExtensionMessage(
       return successResponse({ redirectUrl: getIdentityRedirectUrl() });
     case "oauth/start":
       try {
-        const auth = await startIdentityOAuth(message.authorizationUrl);
+        const auth = await startIdentityOAuth();
         if (auth.status !== "completed") {
           return successResponse(auth);
         }

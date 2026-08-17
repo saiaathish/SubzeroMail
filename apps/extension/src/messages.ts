@@ -66,7 +66,7 @@ export type ExtensionMessage =
     }
   | { type: "mail/send-draft"; draftId: string }
   | { type: "oauth/get-redirect-url" }
-  | { type: "oauth/start"; authorizationUrl?: string }
+  | { type: "oauth/start" }
   | {
       type: "compose/quick";
       mode: "new" | "reply" | "reply-all";
@@ -112,7 +112,6 @@ export function isExtensionMessage(value: unknown): value is ExtensionMessage {
     query?: unknown;
     unread?: unknown;
     starred?: unknown;
-    authorizationUrl?: unknown;
     context?: unknown;
     preferences?: unknown;
     provider?: unknown;
@@ -270,10 +269,7 @@ export function isExtensionMessage(value: unknown): value is ExtensionMessage {
     case "mail/send-draft":
       return typeof message.draftId === "string";
     case "oauth/start":
-      return (
-        message.authorizationUrl === undefined ||
-        typeof message.authorizationUrl === "string"
-      );
+      return true;
     case "compose/quick":
       return (
         message.mode === "new" ||

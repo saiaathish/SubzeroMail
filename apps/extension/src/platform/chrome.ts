@@ -1,9 +1,12 @@
-export interface ChromeStorageLocal {
+export interface ChromeStorageArea {
   get(
     keys?: string | string[] | Record<string, unknown> | null,
   ): Promise<Record<string, unknown>> | Record<string, unknown>;
   set(items: Record<string, unknown>): Promise<void> | void;
+  remove?(keys: string | string[]): Promise<void> | void;
 }
+
+export type ChromeStorageLocal = ChromeStorageArea;
 
 export interface ChromeAlarm {
   name: string;
@@ -20,7 +23,10 @@ export interface ChromeMessageSender {
 }
 
 export interface ChromeApi {
-  storage?: { local?: ChromeStorageLocal };
+  storage?: {
+    local?: ChromeStorageLocal;
+    session?: ChromeStorageArea;
+  };
   permissions?: {
     contains(details: { origins?: string[] }): Promise<boolean> | boolean;
     request(details: { origins?: string[] }): Promise<boolean> | boolean;

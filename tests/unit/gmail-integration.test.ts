@@ -238,6 +238,16 @@ describe("Gmail surface lifecycle", () => {
 
 describe("Gmail message boundary", () => {
   it("falls back to PKCE when Chrome browser sign-in is disabled", async () => {
+    const sessionStore: Record<string, unknown> = {};
+    const sessionStorage = {
+      get: vi.fn(() => ({ ...sessionStore })),
+      set: vi.fn((items: Record<string, unknown>) => {
+        Object.assign(sessionStore, items);
+      }),
+      remove: vi.fn((key: string) => {
+        delete sessionStore[key];
+      }),
+    };
     const getAuthToken = vi
       .fn()
       .mockRejectedValue(new Error("The user turned off browser signin."));
@@ -268,6 +278,7 @@ describe("Gmail message boundary", () => {
           oauth2: { client_id: "extension-client.apps.googleusercontent.com" },
         })),
       },
+      storage: { session: sessionStorage },
     };
     globalThis.fetch = vi.fn(() =>
       Promise.resolve(
@@ -281,7 +292,7 @@ describe("Gmail message boundary", () => {
 
     await expect(startIdentityOAuth()).resolves.toMatchObject({
       status: "completed",
-      redirectUrl: expect.stringContaining("fixture-code"),
+      message: expect.stringContaining("Google authorized Gmail access"),
     });
     expect(getAuthToken).toHaveBeenCalledWith({
       interactive: true,
@@ -301,7 +312,23 @@ describe("Gmail message boundary", () => {
     expect(tokenBody).toContain("code_verifier=");
     expect(tokenBody).not.toContain("memory-access-token");
     expect(tokenBody).not.toContain("memory-refresh-token");
+    expect(sessionStorage.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "subzero.oauth.session": expect.objectContaining({
+          accessToken: "memory-access-token",
+          refreshToken: "memory-refresh-token",
+        }),
+      }),
+    );
     await expect(getIdentityToken(false)).resolves.toBe("memory-access-token");
+    expect(getAuthToken).toHaveBeenCalledTimes(1);
+
+    vi.resetModules();
+    const reloadedOAuth =
+      await import("../../apps/extension/src/platform/oauth");
+    await expect(reloadedOAuth.getIdentityToken(false)).resolves.toBe(
+      "memory-access-token",
+    );
     expect(getAuthToken).toHaveBeenCalledTimes(1);
   });
 
@@ -489,6 +516,35 @@ describe("Gmail message boundary", () => {
     expect((await loadExtensionState()).gmail).toEqual(
       DEFAULT_EXTENSION_STATE.gmail,
     );
+  });
+
+  it("clears local account state even when Chrome cache clearing fails", async () => {
+    await updateExtensionState({
+      account: {
+        mode: "connected",
+        email: "owner@example.com",
+        label: "Gmail connected",
+        detail: "Connected test account",
+      },
+    });
+    vi.spyOn(ExtensionDatabase.prototype, "clearAll").mockResolvedValue(
+      undefined,
+    );
+    vi.spyOn(ExtensionDatabase.prototype, "close").mockImplementation(() => {
+      // The database is already stubbed closed for this unit boundary.
+    });
+    const clearTokens = vi
+      .fn()
+      .mockRejectedValue(new Error("Chrome cache unavailable"));
+    (globalThis as typeof globalThis & { chrome?: unknown }).chrome = {
+      identity: { clearAllCachedAuthTokens: clearTokens },
+    };
+
+    const response = await handleExtensionMessage({ type: "auth/sign-out" });
+
+    expect(response.ok).toBe(true);
+    expect(clearTokens).toHaveBeenCalledOnce();
+    expect((await loadExtensionState()).account.mode).toBe("disconnected");
   });
 
   it("sends connected-account auto-archive and Subzero label requests", async () => {

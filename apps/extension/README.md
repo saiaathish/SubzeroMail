@@ -57,9 +57,10 @@ gate. If Chrome rejects that path because browser sign-in is disabled, the
 worker starts Google authorization with `chrome.identity.launchWebAuthFlow`,
 PKCE, the manifest's public extension client ID, and the extension redirect.
 The code exchange uses Google's token endpoint without a client secret. The
-fallback access and refresh tokens remain memory-only in the background
-worker; they are never written to `chrome.storage`, IndexedDB, logs, or UI.
-Sign-out clears both the Chrome identity cache and the memory session. The
+fallback access and refresh tokens stay in Chrome's session storage, which
+survives MV3 worker restarts but is cleared when the browser session ends; they
+are never written to durable `chrome.storage.local`, IndexedDB, logs, or UI.
+Sign-out clears both the Chrome identity cache and the session record. The
 unpacked build uses the local Chrome Extension client registered to the
 unpacked item ID. A Web Store build uses the separate Web Store client when
 `SUBZERO_EXTENSION_DISTRIBUTION=web-store` is set. Verify the

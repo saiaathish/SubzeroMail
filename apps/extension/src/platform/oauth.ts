@@ -16,6 +16,7 @@ const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const GOOGLE_SCOPES = [GMAIL_MODIFY_SCOPE, "openid", "email", "profile"];
 const TOKEN_EXPIRY_SKEW_MS = 60_000;
+const OAUTH_SESSION_KEY = "subzero.oauth.session";
 
 interface MemoryIdentitySession {
   accessToken: string;
@@ -32,6 +33,8 @@ interface GoogleTokenResponse {
 }
 
 let memoryIdentitySession: MemoryIdentitySession | null = null;
+let sessionLoadPromise: Promise<void> | null = null;
+let sessionEpoch = 0;
 
 function errorMessage(error: unknown): string {
   const raw =
@@ -48,6 +51,74 @@ function errorMessage(error: unknown): string {
 
 function isCancellation(error: unknown): boolean {
   return /cancel|denied|abort|closed/i.test(errorMessage(error));
+}
+
+function parseIdentitySession(value: unknown): MemoryIdentitySession | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.accessToken !== "string" ||
+    candidate.accessToken.trim().length === 0 ||
+    typeof candidate.expiresAt !== "number" ||
+    !Number.isFinite(candidate.expiresAt)
+  ) {
+    return null;
+  }
+
+  const refreshToken =
+    typeof candidate.refreshToken === "string" &&
+    candidate.refreshToken.trim().length > 0
+      ? candidate.refreshToken.trim()
+      : undefined;
+  return {
+    accessToken: candidate.accessToken.trim(),
+    ...(refreshToken ? { refreshToken } : {}),
+    expiresAt: candidate.expiresAt,
+  };
+}
+
+async function loadSessionIdentity(): Promise<void> {
+  if (memoryIdentitySession) return;
+  if (sessionLoadPromise) return sessionLoadPromise;
+
+  const storage = getChrome()?.storage?.session;
+  if (!storage?.get) return;
+
+  const epoch = sessionEpoch;
+  sessionLoadPromise = Promise.resolve()
+    .then(() => storage.get(OAUTH_SESSION_KEY))
+    .then((items) => {
+      if (epoch !== sessionEpoch || memoryIdentitySession) return;
+      memoryIdentitySession = parseIdentitySession(items[OAUTH_SESSION_KEY]);
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      if (epoch === sessionEpoch) sessionLoadPromise = null;
+    });
+  return sessionLoadPromise;
+}
+
+async function persistSessionIdentity(
+  session: MemoryIdentitySession,
+): Promise<void> {
+  const storage = getChrome()?.storage?.session;
+  if (!storage?.set) return;
+  try {
+    await storage.set({ [OAUTH_SESSION_KEY]: session });
+  } catch {
+    // Session storage is a resilience layer. Keep the live token usable even
+    // when a browser profile refuses the best-effort persistence write.
+  }
+}
+
+async function removeSessionIdentity(): Promise<void> {
+  const storage = getChrome()?.storage?.session;
+  if (!storage?.remove) return;
+  try {
+    await storage.remove(OAUTH_SESSION_KEY);
+  } catch {
+    // Sign-out still clears the in-memory session when storage is unavailable.
+  }
 }
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -85,10 +156,10 @@ function extensionClientId(): string | null {
     : null;
 }
 
-function rememberTokenResponse(
+async function rememberTokenResponse(
   response: GoogleTokenResponse,
   existingRefreshToken?: string,
-): string {
+): Promise<string> {
   if (
     typeof response.access_token !== "string" ||
     response.access_token.trim().length === 0
@@ -111,12 +182,14 @@ function rememberTokenResponse(
       ? response.refresh_token.trim()
       : existingRefreshToken;
 
-  memoryIdentitySession = {
+  const session: MemoryIdentitySession = {
     accessToken: response.access_token.trim(),
     ...(refreshToken ? { refreshToken } : {}),
     expiresAt: Date.now() + expiresIn * 1000,
   };
-  return memoryIdentitySession.accessToken;
+  memoryIdentitySession = session;
+  await persistSessionIdentity(session);
+  return session.accessToken;
 }
 
 async function postGoogleTokenRequest(
@@ -157,11 +230,13 @@ async function refreshMemoryToken(): Promise<string | null> {
     return rememberTokenResponse(response, session.refreshToken);
   } catch {
     memoryIdentitySession = null;
+    await removeSessionIdentity();
     return null;
   }
 }
 
 export async function getIdentityToken(interactive = false): Promise<string> {
+  await loadSessionIdentity();
   if (
     memoryIdentitySession &&
     memoryIdentitySession.expiresAt > Date.now() + TOKEN_EXPIRY_SKEW_MS
@@ -174,6 +249,7 @@ export async function getIdentityToken(interactive = false): Promise<string> {
     if (refreshed) return refreshed;
   } else if (memoryIdentitySession) {
     memoryIdentitySession = null;
+    await removeSessionIdentity();
   }
 
   const identity = getChrome()?.identity;
@@ -192,15 +268,27 @@ export async function getIdentityToken(interactive = false): Promise<string> {
   return token.trim();
 }
 
-/** Clear Chrome's cached identity tokens and the extension's memory-only token. */
+/** Clear Chrome's cached identity tokens and the extension's session token. */
 export async function clearIdentitySession(): Promise<void> {
   memoryIdentitySession = null;
-  const identity = getChrome()?.identity;
-  if (!identity) return;
+  sessionEpoch += 1;
+  sessionLoadPromise = null;
 
-  if (identity.clearAllCachedAuthTokens) {
-    await identity.clearAllCachedAuthTokens();
+  const chrome = getChrome();
+  const identity = chrome?.identity;
+  const storage = chrome?.storage?.session;
+  const operations: Promise<unknown>[] = [];
+  if (storage?.remove) {
+    operations.push(
+      Promise.resolve().then(() => storage.remove?.(OAUTH_SESSION_KEY)),
+    );
   }
+  if (identity?.clearAllCachedAuthTokens) {
+    operations.push(
+      Promise.resolve().then(() => identity.clearAllCachedAuthTokens?.()),
+    );
+  }
+  await Promise.allSettled(operations);
 }
 
 export function getIdentityRedirectUrl(): string | null {
@@ -276,13 +364,12 @@ async function startPkceOAuth(): Promise<OAuthBoundaryResult> {
     grant_type: "authorization_code",
     redirect_uri: redirectUrl,
   });
-  rememberTokenResponse(tokenResponse);
+  await rememberTokenResponse(tokenResponse);
 
   return {
     status: "completed",
     message:
       "Google authorized Gmail access. Subzero will now load recent mail.",
-    redirectUrl: returnedUrl,
   };
 }
 
@@ -290,39 +377,23 @@ async function startPkceOAuth(): Promise<OAuthBoundaryResult> {
  * Authenticate the extension directly with Gmail. Chrome's cached identity
  * flow is preferred; PKCE is the browser-signin-independent fallback.
  */
-export async function startIdentityOAuth(
-  authorizationUrl?: string,
-): Promise<OAuthBoundaryResult> {
+export async function startIdentityOAuth(): Promise<OAuthBoundaryResult> {
   const redirectUrl = getIdentityRedirectUrl() ?? undefined;
   const identity = getChrome()?.identity;
 
-  if (!authorizationUrl) {
-    let identityFailure: unknown;
-    if (identity?.getAuthToken) {
-      try {
-        await getIdentityToken(true);
-        return {
-          status: "completed",
-          message:
-            "Google authorized Gmail access. Subzero will now load recent mail.",
-          ...(redirectUrl ? { redirectUrl } : {}),
-        };
-      } catch (error) {
-        identityFailure = error;
-        if (isCancellation(error) || !identity.launchWebAuthFlow) {
-          return {
-            status: "cancelled",
-            message: `Google authorization did not complete. ${errorMessage(error)} No token was stored by Subzero.`,
-            ...(redirectUrl ? { redirectUrl } : {}),
-          };
-        }
-      }
-    }
-
-    if (identity?.launchWebAuthFlow) {
-      try {
-        return await startPkceOAuth();
-      } catch (error) {
+  let identityFailure: unknown;
+  if (identity?.getAuthToken) {
+    try {
+      await getIdentityToken(true);
+      return {
+        status: "completed",
+        message:
+          "Google authorized Gmail access. Subzero will now load recent mail.",
+        ...(redirectUrl ? { redirectUrl } : {}),
+      };
+    } catch (error) {
+      identityFailure = error;
+      if (isCancellation(error) || !identity.launchWebAuthFlow) {
         return {
           status: "cancelled",
           message: `Google authorization did not complete. ${errorMessage(error)} No token was stored by Subzero.`,
@@ -330,65 +401,35 @@ export async function startIdentityOAuth(
         };
       }
     }
+  }
 
-    if (!identity) {
+  if (identity?.launchWebAuthFlow) {
+    try {
+      return await startPkceOAuth();
+    } catch (error) {
       return {
-        status: "unavailable",
-        message: "Chrome identity is unavailable in this profile.",
+        status: "cancelled",
+        message: `Google authorization did not complete. ${errorMessage(error)} No token was stored by Subzero.`,
+        ...(redirectUrl ? { redirectUrl } : {}),
       };
     }
-    if (!identity.getAuthToken && !identity.launchWebAuthFlow) {
-      return {
-        status: "unavailable",
-        message: "Chrome identity token API is unavailable in this profile.",
-      };
-    }
-    return {
-      status: "cancelled",
-      message: `Google authorization did not complete. ${errorMessage(identityFailure)} No token was stored by Subzero.`,
-      ...(redirectUrl ? { redirectUrl } : {}),
-    };
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(authorizationUrl);
-  } catch {
-    return {
-      status: "invalid_url",
-      message: "The OAuth URL was not valid.",
-    };
-  }
-
-  if (parsed.origin !== GOOGLE_AUTH_ORIGIN) {
-    return {
-      status: "invalid_url",
-      message: "Only a Google authorization URL is accepted by this boundary.",
-    };
-  }
-
-  if (!identity?.launchWebAuthFlow) {
+  if (!identity) {
     return {
       status: "unavailable",
       message: "Chrome identity is unavailable in this profile.",
     };
   }
-
-  try {
-    const returnedUrl = await identity.launchWebAuthFlow({
-      url: parsed.toString(),
-      interactive: true,
-    });
+  if (!identity.getAuthToken && !identity.launchWebAuthFlow) {
     return {
-      status: "completed",
-      message:
-        "Chrome returned from the OAuth boundary. Token exchange and Gmail sync are still manual.",
-      redirectUrl: returnedUrl,
-    };
-  } catch (error) {
-    return {
-      status: "cancelled",
-      message: `OAuth was cancelled or rejected by Chrome. ${errorMessage(error)}`,
+      status: "unavailable",
+      message: "Chrome identity token API is unavailable in this profile.",
     };
   }
+  return {
+    status: "cancelled",
+    message: `Google authorization did not complete. ${errorMessage(identityFailure)} No token was stored by Subzero.`,
+    ...(redirectUrl ? { redirectUrl } : {}),
+  };
 }
