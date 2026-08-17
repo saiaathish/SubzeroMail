@@ -37,7 +37,7 @@ Load the generated Chrome directory from `.output/chrome-mv3` using `chrome://ex
 - The full-page client and Side Panel remain connection-gated until live Gmail access succeeds; no fixture inbox is shown to users.
 - After connection, the popup exposes Open Subzero, Quick compose, refresh, account status, sync status, and live thread count.
 - `Cmd/Ctrl+K`, `J`, `K`, `Enter`, `E`, `U`, `R`, `C`, `/`, and `Escape` are wired in the shell.
-- Live Gmail sync uses `chrome.identity.getAuthToken`, Gmail metadata endpoints, IndexedDB caching, and bounded archive/read mutations. The dedicated extension OAuth client is configured in `apps/extension/wxt.config.ts`; fixture helpers remain only for isolated tests.
+- Live Gmail sync uses `chrome.identity.getAuthToken` when Chrome's cached identity path is available, with a PKCE `chrome.identity.launchWebAuthFlow` fallback for profiles where browser sign-in is disabled. Gmail metadata endpoints, IndexedDB caching, and bounded archive/read mutations remain background-worker operations. `apps/extension/wxt.config.ts` uses the unpacked-extension OAuth client by default; set `SUBZERO_EXTENSION_DISTRIBUTION=web-store` for a Web Store build. Fixture helpers remain only for isolated tests.
 - Archive/read actions update the local view optimistically and restore the row when Gmail rejects the mutation.
 - Selected Gmail HTML is sanitized in the browser-safe security boundary before rendering; remote images remain an explicit sender-controlled network risk.
 - Thread summaries and intent-based drafts use the shared `@subzero/ai` schema boundary with a deterministic local fallback; send still requires an explicit click.
@@ -53,18 +53,22 @@ Load the generated Chrome directory from `.output/chrome-mv3` using `chrome://ex
 
 The UI starts `chrome.identity.getAuthToken({ interactive: true })` when the
 user chooses `Continue with Google` during onboarding or from the connection
-gate. The token remains in Chrome's identity cache and is used by the worker
-for Gmail API calls; it is not written to `chrome.storage` or IndexedDB. The manifest contains the dedicated Google
-extension client ID
-`542024114315-24dh9eo654fjs59on3i5dgosfaooulen.apps.googleusercontent.com`.
-Verify the consent/restricted-scope flow manually before release.
-
-A future integration must provide a short-lived authorization URL from a server-owned flow, pass it to the typed `oauth/start` message, validate the returned redirect, and complete token exchange outside this extension scaffold. Do not put credentials in this package or in `chrome.storage.local`.
+gate. If Chrome rejects that path because browser sign-in is disabled, the
+worker starts Google authorization with `chrome.identity.launchWebAuthFlow`,
+PKCE, the manifest's public extension client ID, and the extension redirect.
+The code exchange uses Google's token endpoint without a client secret. The
+fallback access and refresh tokens remain memory-only in the background
+worker; they are never written to `chrome.storage`, IndexedDB, logs, or UI.
+Sign-out clears both the Chrome identity cache and the memory session. The
+unpacked build uses the local Chrome Extension client registered to the
+unpacked item ID. A Web Store build uses the separate Web Store client when
+`SUBZERO_EXTENSION_DISTRIBUTION=web-store` is set. Verify the
+consent/restricted-scope flow manually before release.
 
 ## Live/manual gaps
 
 - UNKNOWN: consent configuration and restricted-scope review for the configured Google extension client.
-- UNKNOWN: clean-profile Gmail authorization, HTML/body/search/mutation behavior, revoke/logout, cache deletion, and live sync evidence.
+- UNKNOWN: clean-profile Gmail authorization, Google consent/client configuration, HTML/body/search/mutation behavior, revoke/logout, cache deletion, and live sync evidence.
 - UNKNOWN: live Gmail DOM selector stability, real Gmail content-script rendering, side-panel context sync in a clean Chrome profile, and manual dark/light Gmail verification. Local fixture/unit proof exists; these are not live Gmail claims.
 - UNKNOWN: live provider/network behavior, provider-side retention, quotas, and user-approved optional host permission behavior for each selected provider.
 - PASS (draft): the Chrome Web Store listing has a public GitHub privacy-policy

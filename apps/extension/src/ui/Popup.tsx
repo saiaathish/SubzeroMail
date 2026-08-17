@@ -9,6 +9,30 @@ import {
   type SubzeroExperience,
 } from "../types";
 
+const EXPERIENCE_OPTIONS: Array<{
+  value: SubzeroExperience;
+  label: string;
+  description: string;
+  recommended?: boolean;
+}> = [
+  {
+    value: "gmail-only",
+    label: "Enhance Gmail",
+    description: "Keep Gmail as your home, with Subzero built in.",
+  },
+  {
+    value: "standalone-only",
+    label: "Use Subzero",
+    description: "Open the full keyboard-first client.",
+  },
+  {
+    value: "both",
+    label: "Both",
+    description: "Gmail enhancements plus the full client.",
+    recommended: true,
+  },
+];
+
 export function Popup() {
   const [state, setState] = useState<ExtensionState>(DEFAULT_EXTENSION_STATE);
   const [counts, setCounts] = useState({ total: 0, needsReply: 0, waiting: 0 });
@@ -133,68 +157,67 @@ export function Popup() {
             <p>Make Gmail faster without replacing it.</p>
           </div>
         </header>
-        <section className="sz-onboarding__intro">
+        <section
+          className="sz-onboarding__intro"
+          aria-labelledby="sz-onboarding-title"
+        >
           <p className="sz-onboarding__eyebrow">WELCOME TO SUBZERO</p>
-          <h1>Keep Gmail. Add the power layer.</h1>
-          <p>
-            Choose where Subzero should meet you. You can change this later in
-            Gmail preferences.
-          </p>
+          <h1 id="sz-onboarding-title">How should Subzero meet Gmail?</h1>
+          <p>Choose a starting point. You can change it later in Settings.</p>
         </section>
-        <fieldset className="sz-onboarding__choices">
-          <legend>How do you want to use Subzero?</legend>
-          {[
-            [
-              "gmail-only",
-              "Enhance Gmail",
-              "Use Gmail normally with Subzero built in.",
-            ],
-            [
-              "standalone-only",
-              "Use Subzero",
-              "Open the full keyboard-first client.",
-            ],
-            ["both", "Both", "Gmail enhancements plus the full client."],
-          ].map(([value, label, description]) => (
-            <label
-              className={`sz-onboarding__choice${experience === value ? " is-selected" : ""}`}
-              key={value}
-            >
-              <input
-                type="radio"
-                name="subzero-experience"
-                value={value}
-                checked={experience === value}
-                onChange={() => setExperience(value as SubzeroExperience)}
-              />
-              <span>
-                <strong>
-                  {label}
-                  {value === "both" ? " · recommended" : ""}
-                </strong>
-                <small>{description}</small>
-              </span>
-            </label>
-          ))}
+        <fieldset className="sz-onboarding__choices" disabled={busy}>
+          <legend>Choose your starting point</legend>
+          {EXPERIENCE_OPTIONS.map(
+            ({ value, label, description, recommended }) => (
+              <label
+                className={`sz-onboarding__choice${experience === value ? " is-selected" : ""}`}
+                key={value}
+              >
+                <input
+                  type="radio"
+                  name="subzero-experience"
+                  value={value}
+                  checked={experience === value}
+                  onChange={() => setExperience(value as SubzeroExperience)}
+                />
+                <span className="sz-onboarding__choice-copy">
+                  <strong>{label}</strong>
+                  {recommended ? (
+                    <span className="sz-onboarding__recommended">
+                      Recommended
+                    </span>
+                  ) : null}
+                  <small>{description}</small>
+                </span>
+              </label>
+            ),
+          )}
         </fieldset>
         <div className="sz-onboarding__footer">
-          <p>
-            AI is optional. You can connect a provider later from settings for
-            summaries or drafting.
-          </p>
+          <p>AI is optional. Add a provider later in Settings.</p>
+          {connectionError ? (
+            <p
+              className="sz-popup__error"
+              id="sz-onboarding-error"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {connectionError}
+            </p>
+          ) : null}
           <button
             className="sz-popup__primary"
             type="button"
             onClick={() => void connectGoogle()}
             disabled={busy}
+            aria-busy={busy}
+            aria-describedby={
+              connectionError ? "sz-onboarding-error" : undefined
+            }
           >
             {busy ? "Connecting…" : "Continue with Google"}
           </button>
-          {connectionError ? (
-            <p className="sz-popup__error" role="status">
-              {connectionError}
-            </p>
-          ) : null}
         </div>
       </main>
     );
@@ -223,19 +246,27 @@ export function Popup() {
           <ShieldCheck size={15} /> Gmail access stays behind Google&apos;s
           authorization screen.
         </div>
+        {connectionError ? (
+          <p
+            className="sz-popup__error"
+            id="sz-connection-error"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {connectionError}
+          </p>
+        ) : null}
         <button
           className="sz-popup__primary"
           type="button"
           onClick={() => void connectGoogle()}
           disabled={busy}
+          aria-busy={busy}
+          aria-describedby={connectionError ? "sz-connection-error" : undefined}
         >
           {busy ? "Connecting…" : "Continue with Google"}
         </button>
-        {connectionError ? (
-          <p className="sz-popup__error" role="status">
-            {connectionError}
-          </p>
-        ) : null}
       </main>
     );
   }

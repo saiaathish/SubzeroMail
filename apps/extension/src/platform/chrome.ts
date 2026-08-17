@@ -34,19 +34,25 @@ export interface ChromeApi {
   };
   identity?: {
     getRedirectURL(path?: string): string;
+    getProfileUserInfo?():
+      | Promise<{ email?: string; id?: string }>
+      | { email?: string; id?: string };
     getAuthToken?(details: {
       interactive?: boolean;
       scopes?: string[];
     }): Promise<{ token?: string }> | { token?: string };
     removeCachedAuthToken?(details: { token: string }): Promise<void> | void;
     clearAllCachedAuthTokens?(): Promise<void> | void;
-    launchWebAuthFlow(details: {
+    launchWebAuthFlow?(details: {
       url: string;
       interactive: boolean;
     }): Promise<string> | string;
   };
   runtime?: {
     getURL(path: string): string;
+    getManifest?(): {
+      oauth2?: { client_id?: string };
+    };
     lastError?: { message?: string };
     onInstalled?: { addListener(listener: () => void): void };
     onMessage?: {

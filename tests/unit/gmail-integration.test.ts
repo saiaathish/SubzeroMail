@@ -19,6 +19,11 @@ import {
   updateExtensionState,
 } from "../../apps/extension/src/platform/storage";
 import { DEFAULT_EXTENSION_STATE } from "../../apps/extension/src/types";
+import {
+  clearIdentitySession,
+  getIdentityToken,
+  startIdentityOAuth,
+} from "../../apps/extension/src/platform/oauth";
 import { ExtensionDatabase } from "@subzero/storage/extension";
 
 const originalChrome = (globalThis as typeof globalThis & { chrome?: unknown })
@@ -44,7 +49,8 @@ function gmailDom(compose = false): void {
   `;
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await clearIdentitySession();
   document.body.innerHTML = "";
   (globalThis as typeof globalThis & { chrome?: unknown }).chrome =
     originalChrome;
@@ -231,6 +237,161 @@ describe("Gmail surface lifecycle", () => {
 });
 
 describe("Gmail message boundary", () => {
+  it("falls back to PKCE when Chrome browser sign-in is disabled", async () => {
+    const getAuthToken = vi
+      .fn()
+      .mockRejectedValue(new Error("The user turned off browser signin."));
+    const launchWebAuthFlow = vi.fn(async ({ url }: { url: string }) => {
+      const authorizationUrl = new URL(url);
+      expect(authorizationUrl.origin).toBe("https://accounts.google.com");
+      expect(authorizationUrl.searchParams.get("client_id")).toBe(
+        "extension-client.apps.googleusercontent.com",
+      );
+      expect(authorizationUrl.searchParams.get("code_challenge")).toMatch(
+        /^[A-Za-z0-9_-]{40,}$/,
+      );
+      expect(authorizationUrl.searchParams.get("code_challenge_method")).toBe(
+        "S256",
+      );
+      return `https://extension-id.chromiumapp.org/subzero-mail?code=fixture-code&state=${encodeURIComponent(authorizationUrl.searchParams.get("state") ?? "")}`;
+    });
+    (globalThis as typeof globalThis & { chrome?: unknown }).chrome = {
+      identity: {
+        getRedirectURL: vi.fn(
+          () => "https://extension-id.chromiumapp.org/subzero-mail",
+        ),
+        getAuthToken,
+        launchWebAuthFlow,
+      },
+      runtime: {
+        getManifest: vi.fn(() => ({
+          oauth2: { client_id: "extension-client.apps.googleusercontent.com" },
+        })),
+      },
+    };
+    globalThis.fetch = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          access_token: "memory-access-token",
+          refresh_token: "memory-refresh-token",
+          expires_in: 3600,
+        }),
+      ),
+    ) as typeof fetch;
+
+    await expect(startIdentityOAuth()).resolves.toMatchObject({
+      status: "completed",
+      redirectUrl: expect.stringContaining("fixture-code"),
+    });
+    expect(getAuthToken).toHaveBeenCalledWith({
+      interactive: true,
+      scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+    });
+    expect(launchWebAuthFlow).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://oauth2.googleapis.com/token",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(URLSearchParams),
+      }),
+    );
+    const tokenRequest = vi.mocked(globalThis.fetch).mock.calls[0]?.[1];
+    const tokenBody = String(tokenRequest?.body ?? "");
+    expect(tokenBody).toContain("code=fixture-code");
+    expect(tokenBody).toContain("code_verifier=");
+    expect(tokenBody).not.toContain("memory-access-token");
+    expect(tokenBody).not.toContain("memory-refresh-token");
+    await expect(getIdentityToken(false)).resolves.toBe("memory-access-token");
+    expect(getAuthToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a PKCE callback with the wrong state before token exchange", async () => {
+    const fetchMock = vi.fn();
+    const launchWebAuthFlow = vi.fn(async ({ url }: { url: string }) => {
+      new URL(url);
+      return `https://extension-id.chromiumapp.org/subzero-mail?code=fixture-code&state=wrong-state`;
+    });
+    (globalThis as typeof globalThis & { chrome?: unknown }).chrome = {
+      identity: {
+        getRedirectURL: vi.fn(
+          () => "https://extension-id.chromiumapp.org/subzero-mail",
+        ),
+        launchWebAuthFlow,
+      },
+      runtime: {
+        getManifest: vi.fn(() => ({
+          oauth2: { client_id: "extension-client.apps.googleusercontent.com" },
+        })),
+      },
+    };
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await expect(startIdentityOAuth()).resolves.toMatchObject({
+      status: "cancelled",
+      message: expect.stringContaining("invalid OAuth state"),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the Chrome Identity failure without persisting a token", async () => {
+    const getAuthToken = vi
+      .fn()
+      .mockRejectedValue(
+        new Error("OAuth client is not registered for this item ID."),
+      );
+    (globalThis as typeof globalThis & { chrome?: unknown }).chrome = {
+      identity: {
+        getRedirectURL: vi.fn(
+          () =>
+            "https://ipdijfkojgocigfgbljbanaeallaplnp.chromiumapp.org/subzero-mail",
+        ),
+        getAuthToken,
+      },
+    };
+
+    await expect(startIdentityOAuth()).resolves.toMatchObject({
+      status: "cancelled",
+      message: expect.stringContaining(
+        "OAuth client is not registered for this item ID.",
+      ),
+    });
+    expect(getAuthToken).toHaveBeenCalledWith({
+      interactive: true,
+      scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+    });
+  });
+
+  it("reports an unavailable Chrome Identity token API clearly", async () => {
+    (globalThis as typeof globalThis & { chrome?: unknown }).chrome = {
+      identity: {
+        getRedirectURL: vi.fn(
+          () =>
+            "https://ipdijfkojgocigfgbljbanaeallaplnp.chromiumapp.org/subzero-mail",
+        ),
+      },
+    };
+
+    await expect(startIdentityOAuth()).resolves.toMatchObject({
+      status: "unavailable",
+      message: "Chrome identity token API is unavailable in this profile.",
+    });
+  });
+
+  it("rejects an empty token as a failed authorization", async () => {
+    const getAuthToken = vi.fn().mockResolvedValue({ token: "   " });
+    (globalThis as typeof globalThis & { chrome?: unknown }).chrome = {
+      identity: { getAuthToken },
+    };
+
+    await expect(startIdentityOAuth()).resolves.toMatchObject({
+      status: "cancelled",
+      message: expect.stringContaining(
+        "Chrome did not return a Gmail access token.",
+      ),
+    });
+    expect(getAuthToken).toHaveBeenCalledTimes(1);
+  });
+
   it("accepts bounded context and rejects malformed context", () => {
     expect(
       isExtensionMessage({

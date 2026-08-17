@@ -53,6 +53,23 @@ test("loads the MV3 full-page client and useful popup", async () => {
       popup.getByRole("button", { name: /Continue with Google/i }),
     ).toBeVisible();
     await expect(popup.getByText("Demo fixture")).toHaveCount(0);
+
+    await popup.setViewportSize({ width: 137, height: 604 });
+    await popup.reload();
+    await expect(
+      popup.getByRole("button", { name: /Continue with Google/i }),
+    ).toBeVisible();
+    const narrowLayout = await popup.evaluate(() => {
+      const root = document.documentElement;
+      const cta = document.querySelector<HTMLElement>(".sz-popup__primary");
+      const rect = cta?.getBoundingClientRect();
+      return {
+        overflowX: root.scrollWidth > root.clientWidth,
+        ctaRight: rect?.right ?? Number.POSITIVE_INFINITY,
+      };
+    });
+    expect(narrowLayout.overflowX).toBe(false);
+    expect(narrowLayout.ctaRight).toBeLessThanOrEqual(137);
   } finally {
     await context?.close();
     await rm(profile, { recursive: true, force: true });
